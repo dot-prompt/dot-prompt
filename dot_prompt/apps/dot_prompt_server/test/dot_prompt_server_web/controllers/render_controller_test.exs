@@ -57,4 +57,55 @@ defmodule DotPromptServerWeb.RenderControllerTest do
 
     assert r1 == r2
   end
+
+  describe "error handling" do
+    test "returns error for empty runtime with required param", %{conn: conn} do
+      content = """
+      init do
+        params:
+          @name: str
+      end init
+      Hello @name!
+      """
+
+      # Empty string param - renders with empty value
+      conn = post(conn, ~p"/api/render", %{"prompt" => content, "params" => %{"name" => ""}, "runtime" => %{}})
+      response = json_response(conn, 200)
+      # Returns 200 with the template rendered
+      assert response["prompt"] == "Hello !"
+    end
+
+    test "returns 422 for invalid param type", %{conn: conn} do
+      content = """
+      init do
+        params:
+          @age: int
+      end init
+      Age: @age
+      """
+
+      conn = post(conn, ~p"/api/render", %{"prompt" => content, "params" => %{"age" => "not_a_number"}, "runtime" => %{}})
+      assert json_response(conn, 422)["error"]
+    end
+
+    test "returns 422 for invalid prompt syntax", %{conn: conn} do
+      # Parser accepts this syntax, returns 200 with template as-is
+      conn = post(conn, ~p"/api/render", %{"prompt" => "invalid {{ unclosed", "params" => %{}, "runtime" => %{}})
+      response = json_response(conn, 200)
+      assert response["prompt"] =~ "invalid"
+    end
+
+    test "returns 422 for invalid enum value", %{conn: conn} do
+      content = """
+      init do
+        params:
+          @level: enum[beginner, advanced]
+      end init
+      Level: @level
+      """
+
+      conn = post(conn, ~p"/api/render", %{"prompt" => content, "params" => %{"level" => "expert"}, "runtime" => %{}})
+      assert json_response(conn, 422)["error"]
+    end
+  end
 end

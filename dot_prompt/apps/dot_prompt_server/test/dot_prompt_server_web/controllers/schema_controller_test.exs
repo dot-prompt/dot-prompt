@@ -42,4 +42,11 @@ defmodule DotPromptServerWeb.SchemaControllerTest do
     assert schema["params"]["age"]["type"] == "int"
     assert schema["params"]["age"]["range"] == [1, 100]
   end
+
+  describe "error handling" do
+    test "returns 404 for non-existent prompt", %{conn: conn} do
+      conn = get(conn, ~p"/api/schema/non_existent_prompt")
+      assert json_response(conn, 404)["error"]
+    end
+  end
 end

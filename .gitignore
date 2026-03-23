@@ -19,6 +19,14 @@ Thumbs.db
 .env
 .env.local
 
-# Editor/editor temp
+# Editor temp
 *.backup
 *~
+
+# Dot prompt app specific
+dot_prompt/_build/
+dot_prompt/deps/
+dot_prompt/doc/
+dot_prompt/cover/
+dot_prompt/tmp/
+dot_prompt/.runtime_storage.json

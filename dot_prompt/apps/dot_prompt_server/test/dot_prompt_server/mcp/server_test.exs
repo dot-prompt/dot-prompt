@@ -118,7 +118,7 @@ defmodule DotPromptServer.MCP.ServerTest do
       response = Server.process_request(request)
 
       assert response.id == 7
-      assert response.result["error"] !== nil
+      assert response.result[:error] !== nil
     end
   end
 
@@ -148,7 +148,7 @@ defmodule DotPromptServer.MCP.ServerTest do
       response = Server.process_request(request)
 
       assert response.id == 9
-      assert response.result["error"] !== nil
+      assert response.result[:error] !== nil
     end
   end
 

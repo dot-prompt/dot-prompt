@@ -36,4 +36,41 @@ defmodule DotPromptServerWeb.PromptsControllerTest do
     collections = response["collections"]
     assert "skills" in collections
   end
+
+  describe "error handling" do
+    test "returns empty list when no prompts exist", %{conn: conn} do
+      # Test with a different prompts directory that has no prompts
+      temp_dir = Path.expand("test/fixtures/empty_prompts", File.cwd!())
+      File.mkdir_p!(temp_dir)
+      original_dir = Application.get_env(:dot_prompt, :prompts_dir)
+      Application.put_env(:dot_prompt, :prompts_dir, temp_dir)
+
+      try do
+        conn = get(conn, ~p"/api/prompts")
+        response = json_response(conn, 200)
+        assert response["prompts"] == []
+      after
+        File.rm_rf!(temp_dir)
+        Application.put_env(:dot_prompt, :prompts_dir, original_dir)
+      end
+    end
+
+    test "returns empty list when no collections exist", %{conn: conn} do
+      # Test with a prompts directory that has no _index files (collections)
+      temp_dir = Path.expand("test/fixtures/no_collections", File.cwd!())
+      File.mkdir_p!(temp_dir)
+      File.write!(Path.join(temp_dir, "solo.prompt"), "solo content")
+      original_dir = Application.get_env(:dot_prompt, :prompts_dir)
+      Application.put_env(:dot_prompt, :prompts_dir, temp_dir)
+
+      try do
+        conn = get(conn, ~p"/api/collections")
+        response = json_response(conn, 200)
+        assert response["collections"] == []
+      after
+        File.rm_rf!(temp_dir)
+        Application.put_env(:dot_prompt, :prompts_dir, original_dir)
+      end
+    end
+  end
 end
