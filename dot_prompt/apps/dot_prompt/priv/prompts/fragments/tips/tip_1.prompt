@@ -1,0 +1,14 @@
+init do
+  @version: 1
+
+  params:
+    @topic: str
+
+  fragments:
+    @tip_1:
+      match: productivity
+      doc: "First productivity tip"
+end init
+
+# Tip 1: Start Your Day Right
+Begin your day with a clear plan. Write down your top 3 priorities before checking email.

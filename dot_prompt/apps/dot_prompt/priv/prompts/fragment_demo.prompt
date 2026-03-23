@@ -1,0 +1,43 @@
+init do
+  @version: 1
+
+  params:
+    @name: str
+    @user_level: enum[beginner, intermediate, advanced]
+    @time_of_day: enum[morning, afternoon, evening]
+    @include_tips: bool
+    @include_welcome: bool
+
+  doc: "A prompt file that demonstrates using multiple fragment types"
+
+  variants:
+    - @name
+    - @user_level
+    - @time_of_day
+end init
+
+# Prompt with Fragment Expansion Demo
+
+This prompt demonstrates all the fragment types available in dot_prompt.
+
+## Static Fragment (simple, cached)
+{fragments/simple_greeting}
+
+## Dynamic Fragment (re-evaluated each time)
+{{fragments/personalized_greeting}}
+
+## Conditional Fragment (if/else logic)
+{#if @include_welcome}
+{fragments/conditional_greeting}
+{/if}
+
+## Collection Fragment (iterates over folder)
+{#if @include_tips}
+{fragments/tips/}
+{/if}
+
+## Combined Fragment (references other fragments)
+{fragments/combined_greeting}
+
+---
+End of prompt

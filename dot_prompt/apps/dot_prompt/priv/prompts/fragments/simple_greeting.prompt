@@ -1,0 +1,15 @@
+init do
+  @version: 1
+
+  params:
+    @name: str
+
+  fragments:
+    @simple_greeting:
+      type: static
+      from: fragments/simple_greeting
+      doc: "A simple greeting fragment with static content"
+end init
+
+# Simple Greeting Fragment
+Hello! Welcome to our system.

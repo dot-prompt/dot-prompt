@@ -1,0 +1,784 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#08090b;--s1:#0e1014;--s2:#14171d;--s3:#1a1e26;--s4:#20252f;
+  --b1:rgba(255,255,255,0.05);--b2:rgba(255,255,255,0.09);--b3:rgba(255,255,255,0.15);
+  --tx:#dde1e8;--mu:#52586a;--mu2:#7c8494;
+  --gr:#1d9e75;--gr2:#0f6e56;--gr3:#085041;--grg:rgba(29,158,117,0.12);--grt:rgba(29,158,117,0.06);
+  --am:#ef9f27;--amg:rgba(239,159,39,0.1);
+  --co:#d85a30;--cog:rgba(216,90,48,0.1);
+  --pu:#8b84e8;--pug:rgba(139,132,232,0.1);
+  --bl:#4a9edd;--blg:rgba(74,158,221,0.1);
+  --re:#e05555;--reg:rgba(224,85,85,0.12);
+  --mo:'Berkeley Mono','Fira Code','JetBrains Mono',monospace;
+  --nav:180px;--par:214px;--tokw:220px;
+}
+body{background:var(--bg);color:var(--tx);font-family:'Geist','IBM Plex Sans','Helvetica Neue',sans-serif;font-size:13px;line-height:1.5}
+.shell{display:flex;height:720px;overflow:hidden;border-radius:10px;border:0.5px solid var(--b3);background:var(--bg)}
+
+.nav{width:var(--nav);background:var(--s1);border-right:0.5px solid var(--b2);display:flex;flex-direction:column;flex-shrink:0}
+.nav-head{height:42px;display:flex;align-items:center;padding:0 14px;border-bottom:0.5px solid var(--b2);gap:8px;flex-shrink:0}
+.logo{font-size:15px;font-weight:600;letter-spacing:-0.02em}
+.logo em{color:var(--gr);font-style:normal}
+.epill{font-size:9px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;background:var(--grg);color:var(--gr);border:0.5px solid var(--gr2);padding:2px 6px;border-radius:20px;margin-left:auto}
+.ns{padding:8px 8px 2px}
+.nl{font-size:9px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--mu);padding:0 6px;margin-bottom:2px}
+.ni{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:5px;cursor:pointer;color:var(--mu2);font-size:12px;transition:all 0.1s;white-space:nowrap}
+.ni:hover{background:var(--s2);color:var(--tx)}
+.ni.on{background:var(--grg);color:var(--gr);border:0.5px solid var(--gr2)}
+.ni svg{width:13px;height:13px;flex-shrink:0;opacity:0.8}
+.ni.on svg{opacity:1}
+.ndiv{height:0.5px;background:var(--b1);margin:5px 8px}
+.nbot{margin-top:auto;padding:8px;border-top:0.5px solid var(--b1)}
+.fdir{font-size:9px;text-transform:uppercase;letter-spacing:0.1em;color:var(--mu);padding:5px 8px 1px}
+.fr{display:flex;align-items:center;gap:6px;padding:4px 8px 4px 16px;border-radius:4px;cursor:pointer;color:var(--mu2);font-size:11px;font-family:var(--mo);transition:all 0.1s}
+.fr:hover{background:var(--s2);color:var(--tx)}
+.fr.on{color:var(--gr)}
+.fdot{width:4px;height:4px;border-radius:50%;background:currentColor;flex-shrink:0}
+.famd{width:5px;height:5px;border-radius:50%;background:var(--am);margin-left:auto;flex-shrink:0}
+
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.tbar{height:42px;background:var(--s1);border-bottom:0.5px solid var(--b2);display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0}
+.vtog{display:flex;background:var(--s3);border:0.5px solid var(--b2);border-radius:6px;padding:2px;gap:1px}
+.vb{font-size:11px;padding:4px 11px;border-radius:4px;cursor:pointer;border:none;background:transparent;color:var(--mu2);font-family:inherit;transition:all 0.1s;position:relative}
+.vb.on{background:var(--s1);color:var(--tx);border:0.5px solid var(--b2)}
+.vb.stale::after{content:'';position:absolute;top:3px;right:3px;width:5px;height:5px;border-radius:50%;background:var(--am)}
+.tfile{font-size:11px;color:var(--mu2);font-family:var(--mo)}
+
+.tright{margin-left:auto;display:flex;align-items:center;gap:6px}
+.btn{font-size:11px;padding:5px 11px;border-radius:5px;cursor:pointer;border:0.5px solid var(--b2);background:transparent;color:var(--mu2);font-family:inherit;transition:all 0.1s;white-space:nowrap}
+.btn:hover{background:var(--s2);color:var(--tx)}
+.btn-gr{background:var(--grg);color:var(--gr);border-color:var(--gr2)}
+.btn-gr:hover{background:rgba(29,158,117,0.2)}
+.btn-am{background:var(--amg);color:var(--am);border-color:rgba(239,159,39,0.3)}
+.btn-edit{background:var(--pug);color:var(--pu);border-color:rgba(139,132,232,0.3)}
+.btn-edit:hover{background:rgba(139,132,232,0.18)}
+
+.work{flex:1;display:flex;overflow:hidden;min-height:0;position:relative}
+.epane{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+
+.sbanner{display:none;align-items:center;gap:10px;padding:7px 14px;background:var(--s2);border-bottom:0.5px solid var(--b2);flex-shrink:0}
+.sbanner.show{display:flex}
+.sdot{width:5px;height:5px;border-radius:50%;background:var(--am);flex-shrink:0}
+.slabel{font-size:11px;color:var(--mu2)}
+.slabel em{color:var(--am);font-style:normal}
+.sacts{margin-left:auto;display:flex;gap:6px}
+
+.crow{display:none;align-items:center;gap:8px;padding:7px 14px;background:var(--s3);border-bottom:0.5px solid var(--b2);flex-shrink:0}
+.crow.show{display:flex}
+.clbl{font-size:11px;color:var(--mu2)}
+.vops{display:flex;gap:3px}
+.vbtn{font-size:11px;padding:4px 9px;border-radius:4px;cursor:pointer;border:0.5px solid var(--b2);background:transparent;color:var(--mu2);font-family:inherit;transition:all 0.1s}
+.vbtn.on{background:var(--grg);color:var(--gr);border-color:var(--gr2)}
+.vprev{font-size:11px;font-family:var(--mo);color:var(--mu2);margin-left:6px}
+.vprev span{color:var(--gr)}
+
+.cscroll{flex:1;overflow-y:auto;padding:12px 0}
+.cscroll::-webkit-scrollbar{width:4px}
+.cscroll::-webkit-scrollbar-thumb{background:var(--b2);border-radius:2px}
+
+.ced{font-family:var(--mo);font-size:12px;line-height:1.8}
+.cl{display:flex;align-items:flex-start;position:relative}
+.cl:hover .cc{background:rgba(255,255,255,0.012)}
+.cl.hl-gr{background:rgba(29,158,117,0.06);border-left:2px solid var(--gr)}
+.cl.hl-am{background:rgba(239,159,39,0.05);border-left:2px solid var(--am)}
+.cl.ann{background:var(--s2);cursor:pointer}
+.cl.ann:hover{background:var(--s3)}
+.cl.collapsed{display:none}
+.ln{width:40px;text-align:right;padding-right:14px;color:var(--mu);font-size:10px;opacity:0.35;flex-shrink:0;padding-top:2px;user-select:none;line-height:1.8}
+.cc{flex:1;padding-right:18px;white-space:pre-wrap;word-break:break-word;color:var(--tx)}
+.ann .cc{color:var(--mu2);font-size:11px;font-style:italic;padding:1px 0;display:flex;align-items:center;gap:6px}
+.chev{font-size:10px;color:var(--mu);transition:transform 0.15s;margin-left:auto;padding-right:4px;flex-shrink:0}
+.chev.open{transform:rotate(90deg)}
+
+.edit-mode .cc[data-editable]{outline:none;border-radius:2px}
+.edit-mode .cc[data-editable]:hover{background:rgba(139,132,232,0.06);cursor:text}
+.edit-mode .cc[data-editable]:focus{background:rgba(139,132,232,0.1);box-shadow:inset 0 0 0 1px rgba(139,132,232,0.3)}
+
+.kw{color:var(--pu)}
+.vr{color:var(--gr)}
+.vl{color:var(--am)}
+.cm{color:var(--mu);font-style:italic}
+.fs{color:var(--bl)}
+.fd{color:var(--co)}
+.rv{color:var(--am);background:rgba(239,159,39,0.12);padding:0 3px;border-radius:3px}
+.va{color:var(--pu);font-size:11px}
+.ab{display:inline-flex;align-items:center;gap:4px;font-size:10px;background:var(--s3);border:0.5px solid var(--b2);padding:2px 8px;border-radius:3px;color:var(--mu2);font-style:normal}
+.ab-gr{background:var(--grt);border-color:rgba(29,158,117,0.2);color:var(--gr)}
+.ab-bl{background:var(--blg);border-color:rgba(74,158,221,0.2);color:var(--bl)}
+.ab-pu{background:var(--pug);border-color:rgba(139,132,232,0.2);color:var(--pu)}
+
+.sbar{height:28px;background:var(--s1);border-top:0.5px solid var(--b2);display:flex;align-items:center;padding:0 14px;flex-shrink:0}
+.st{display:flex;align-items:center;gap:5px;padding:0 10px;border-right:0.5px solid var(--b1)}
+.st:last-of-type{border-right:none}
+.slb{font-size:10px;color:var(--mu);letter-spacing:0.05em}
+.sv{font-size:11px;font-weight:500;font-family:var(--mo)}
+.sv-gr{color:var(--gr)}
+.sv-am{color:var(--am)}
+.sv-co{color:var(--co)}
+.sv-pu{color:var(--pu)}
+.sv-mu{color:var(--mu2)}
+.sright{margin-left:auto;display:flex;align-items:center;gap:8px}
+.sconndot{width:5px;height:5px;border-radius:50%;background:var(--gr)}
+
+.tok-delta{display:flex;align-items:center;gap:4px;font-size:11px;font-family:var(--mo);font-weight:500}
+.tok-plus{color:var(--re)}
+.tok-minus{color:var(--gr)}
+
+.ppane{width:var(--par);background:var(--s1);border-left:0.5px solid var(--b2);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;transition:width 0.15s}
+.ppane.closed{width:0;border-left:none}
+.ph{height:42px;display:flex;align-items:center;padding:0 12px;border-bottom:0.5px solid var(--b2);flex-shrink:0}
+.ptitle{font-size:10px;font-weight:600;letter-spacing:0.09em;text-transform:uppercase;color:var(--mu)}
+.pbody{flex:1;overflow-y:auto;padding:10px}
+.pbody::-webkit-scrollbar{width:3px}
+.pbody::-webkit-scrollbar-thumb{background:var(--b2);border-radius:2px}
+.pgl{font-size:9px;text-transform:uppercase;letter-spacing:0.09em;color:var(--mu);margin:10px 0 5px;padding:0 2px}
+.pgl:first-child{margin-top:2px}
+.pr{margin-bottom:9px;position:relative}
+.plbl{display:flex;align-items:center;gap:4px;margin-bottom:3px;flex-wrap:wrap}
+.pn{color:var(--gr);font-family:var(--mo);font-size:11px}
+.pt{font-size:9px;color:var(--mu2);background:var(--s3);border:0.5px solid var(--b1);padding:1px 5px;border-radius:3px}
+.lc{font-size:9px;padding:1px 5px;border-radius:3px}
+.lcc{color:var(--pu);background:var(--pug);border:0.5px solid rgba(139,132,232,0.2)}
+.lcr{color:var(--co);background:var(--cog);border:0.5px solid rgba(216,90,48,0.2)}
+.pi{width:100%;background:var(--s3);border:0.5px solid var(--b2);color:var(--tx);font-family:var(--mo);font-size:11px;padding:5px 7px;border-radius:4px;outline:none;appearance:none}
+.pi:focus{border-color:var(--gr);box-shadow:0 0 0 2px var(--grg)}
+.pi.rt{cursor:pointer;border-style:dashed}
+.pi.rt:hover{border-color:var(--mu2);background:var(--s2)}
+.pdiv{height:0.5px;background:var(--b1);margin:8px 0}
+
+.tok-panel{display:none;width:var(--tokw);background:var(--s1);border-left:0.5px solid var(--b2);flex-direction:column;flex-shrink:0;overflow:hidden;transition:width 0.15s}
+.tok-panel.open{display:flex}
+.tp-head{height:42px;display:flex;align-items:center;padding:0 12px;border-bottom:0.5px solid var(--b2);gap:6px;flex-shrink:0}
+.tp-title{font-size:10px;font-weight:600;letter-spacing:0.09em;text-transform:uppercase;color:var(--mu)}
+.tp-close{margin-left:auto;font-size:11px;color:var(--mu);cursor:pointer;padding:2px 6px;border-radius:3px}
+.tp-close:hover{background:var(--s3);color:var(--tx)}
+.tp-body{flex:1;overflow-y:auto;padding:12px}
+.tp-body::-webkit-scrollbar{width:3px}
+.tp-body::-webkit-scrollbar-thumb{background:var(--b2);border-radius:2px}
+.tp-cards{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:14px}
+.tp-card{background:var(--s2);border:0.5px solid var(--b1);border-radius:6px;padding:8px 10px}
+.tp-cl{font-size:9px;text-transform:uppercase;letter-spacing:0.08em;color:var(--mu);margin-bottom:3px}
+.tp-cv{font-size:18px;font-weight:500;font-family:var(--mo)}
+.tp-sec{margin-bottom:12px}
+.tp-sl{font-size:10px;color:var(--mu2);margin-bottom:6px;font-weight:500;text-transform:uppercase;letter-spacing:0.07em}
+.tp-track{height:8px;background:var(--s3);border-radius:4px;overflow:hidden;display:flex;gap:1px;margin-bottom:6px}
+.tp-seg{height:100%}
+.tp-legend{display:flex;flex-direction:column;gap:3px}
+.tp-leg{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--mu2)}
+.tp-legdot{width:8px;height:8px;border-radius:2px;flex-shrink:0}
+.tp-legval{margin-left:auto;font-family:var(--mo);font-size:11px;color:var(--tx)}
+.tp-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:0.5px solid var(--b1);font-size:11px}
+.tp-row:last-child{border-bottom:none}
+.tp-rl{color:var(--mu2)}
+.tp-rv{font-family:var(--mo);color:var(--tx)}
+
+.popover{display:none;position:absolute;right:calc(var(--par) + 4px);background:var(--s2);border:0.5px solid var(--b3);border-radius:7px;padding:12px;z-index:30;width:240px}
+.popover.show{display:block}
+.pop-head{font-size:10px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--mu);margin-bottom:8px;display:flex;align-items:center;justify-content:space-between}
+.pop-close{cursor:pointer;color:var(--mu);padding:1px 5px;border-radius:3px}
+.pop-close:hover{background:var(--s3);color:var(--tx)}
+.pop-input{width:100%;background:var(--s1);border:0.5px solid var(--b3);color:var(--tx);font-family:var(--mo);font-size:11px;padding:6px 8px;border-radius:4px;outline:none;margin-bottom:8px}
+.pop-input:focus{border-color:var(--gr)}
+.pop-flbl{font-size:9px;text-transform:uppercase;letter-spacing:0.08em;color:var(--mu);margin-bottom:5px}
+.pf-row{display:flex;align-items:center;gap:6px;padding:5px 7px;border-radius:4px;cursor:pointer;background:var(--s1);border:0.5px solid var(--b1);margin-bottom:3px;transition:all 0.1s}
+.pf-row:hover{border-color:var(--gr2);background:var(--grt)}
+.pf-lbl{font-size:11px;color:var(--mu2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pf-val{font-size:10px;font-family:var(--mo);color:var(--tx);max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pf-del{font-size:11px;color:var(--mu);cursor:pointer;padding:0 3px;opacity:0;flex-shrink:0}
+.pf-row:hover .pf-del{opacity:1}
+.pop-save{width:100%;font-size:11px;padding:5px;border-radius:4px;cursor:pointer;border:0.5px solid var(--b2);background:transparent;color:var(--mu2);font-family:inherit;transition:all 0.1s;margin-top:2px}
+.pop-save:hover{background:var(--s3);color:var(--tx)}
+
+/* Dropdown styles for runtime params */
+.param-dropdown{position:relative}
+.dd-menu{display:none;position:absolute;top:100%;left:0;right:0;background:var(--s2);border:0.5px solid var(--b3);border-radius:6px;padding:4px;z-index:40;max-height:200px;overflow-y:auto}
+.dd-menu.open{display:block}
+.dd-option{padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;color:var(--mu2);transition:all 0.1s}
+.dd-option:hover{background:var(--s3);color:var(--tx)}
+.dd-option.selected{background:var(--grg);color:var(--gr)}
+.dd-divider{height:0.5px;background:var(--b1);margin:4px 0}
+.dd-add-more{color:var(--am);font-weight:500;border-top:0.5px solid var(--b1);margin-top:4px;padding-top:8px}
+.dd-add-more:hover{background:var(--amg)}
+
+/* Fixture creator panel */
+.fixture-creator{display:none;position:absolute;right:calc(var(--par) + 4px);background:var(--s2);border:0.5px solid var(--b3);border-radius:7px;padding:12px;z-index:50;width:240px}
+.fixture-creator.open{display:block}
+.fc-header{font-size:10px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--mu);margin-bottom:8px;display:flex;align-items:center;justify-content:space-between}
+.fc-header button{cursor:pointer;color:var(--mu);padding:1px 5px;border-radius:3px;background:transparent;border:none;font-size:14px}
+.fc-header button:hover{background:var(--s3);color:var(--tx)}
+.fc-name{width:100%;background:var(--s1);border:0.5px solid var(--b3);color:var(--tx);font-family:var(--mo);font-size:11px;padding:6px 8px;border-radius:4px;outline:none;margin-bottom:6px}
+.fc-name:focus{border-color:var(--gr)}
+.fc-name::placeholder{color:var(--mu)}
+.fc-value{width:100%;background:var(--s1);border:0.5px solid var(--b3);color:var(--tx);font-family:var(--mo);font-size:11px;padding:6px 8px;border-radius:4px;outline:none;margin-bottom:8px;min-height:60px;resize:vertical}
+.fc-value:focus{border-color:var(--gr)}
+.fc-value::placeholder{color:var(--mu)}
+.fc-save{width:100%;font-size:11px;padding:6px;border-radius:4px;cursor:pointer;border:0.5px solid var(--gr2);background:var(--grg);color:var(--gr);font-family:inherit;transition:all 0.1s}
+.fc-save:hover{background:rgba(29,158,117,0.2)}
+</style>
+
+<div class="shell">
+<div class="nav">
+  <div class="nav-head">
+    <span class="logo"><em>.</em>prompt</span>
+    <span class="epill">dev</span>
+  </div>
+  <div class="ns">
+    <div class="nl">Files</div>
+    <div class="fdir">prompts/</div>
+    <div class="fr on"><div class="fdot"></div>concept_explanation<div class="famd"></div></div>
+    <div class="fr"><div class="fdot"></div>practice_mode</div>
+    <div class="fdir">skills/</div>
+    <div class="fr" style="opacity:.55"><div class="fdot"></div>_index</div>
+    <div class="fr" style="opacity:.55"><div class="fdot"></div>milton_model</div>
+    <div class="fr" style="opacity:.55"><div class="fdot"></div>meta_model</div>
+  </div>
+  <div class="ndiv"></div>
+  <div class="ns">
+    <div class="nl">Tools</div>
+    <div class="ni on">
+      <svg viewBox="0 0 13 13" fill="none"><rect x="1" y="1" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.1"/><path d="M4 5l2 2-2 2M7.5 9h2" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>Editor
+    </div>
+    <div class="ni">
+      <svg viewBox="0 0 13 13" fill="none"><path d="M2 4h9M2 6.5h6M2 9h4" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>Render test
+    </div>
+    <div class="ni">
+      <svg viewBox="0 0 13 13" fill="none"><circle cx="6.5" cy="6.5" r="5" stroke="currentColor" stroke-width="1.1"/><path d="M6.5 4v2.5l1.5 1.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>Cache / stats
+    </div>
+    <div class="ni">
+      <svg viewBox="0 0 13 13" fill="none"><path d="M1 9.5L4 6l2.5 2.5 5-6" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>Telemetry
+    </div>
+  </div>
+  <div class="nbot">
+    <div class="ni" style="font-size:11px">
+      <svg viewBox="0 0 13 13" fill="none"><circle cx="6.5" cy="4" r="2" stroke="currentColor" stroke-width="1.1"/><path d="M2 11c0-2.2 2-4 4.5-4s4.5 1.8 4.5 4" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>Docs
+    </div>
+  </div>
+</div>
+
+<div class="main">
+  <div class="tbar">
+    <div class="vtog">
+      <button class="vb" id="vs" onclick="setView('source')">Source</button>
+      <button class="vb on" id="vc" onclick="setView('compiled')">Compiled</button>
+    </div>
+    <span class="tfile">concept_explanation.prompt</span>
+
+    <div class="tright">
+      <button class="btn" id="editbtn" onclick="toggleEdit()">Edit</button>
+      <button class="btn" id="ptogbtn" onclick="toggleParams()">Params ›</button>
+      <button class="btn" id="tokbtn" onclick="toggleTok()">Tokens ›</button>
+    </div>
+  </div>
+
+  <div class="work" id="work">
+    <div class="epane">
+      <div class="sbanner" id="sbanner">
+        <div class="sdot"></div>
+        <span class="slabel">Compiled view has unsaved edits — <em>source unchanged.</em></span>
+        <div class="sacts">
+          <button class="btn" onclick="discard()">Discard</button>
+          <button class="btn btn-am" onclick="showCommit()">Commit…</button>
+        </div>
+      </div>
+      <div class="crow" id="crow">
+        <span class="clbl">Bump version:</span>
+        <div class="vops">
+          <button class="vbtn" id="vp" onclick="selVer('patch')">patch</button>
+          <button class="vbtn on" id="vm" onclick="selVer('minor')">minor</button>
+          <button class="vbtn" id="vj" onclick="selVer('major')">major</button>
+        </div>
+        <span class="vprev" id="vprev">v1 → <span>v1.1</span></span>
+        <div style="margin-left:auto;display:flex;gap:6px">
+          <button class="btn" onclick="hideCommit()">Cancel</button>
+          <button class="btn btn-gr" onclick="doCommit()">Save as new version</button>
+        </div>
+      </div>
+
+      <div class="cscroll">
+        <div class="ced" id="ced"></div>
+      </div>
+
+      <div class="sbar">
+        <div class="st"><span class="slb">tokens</span><span class="sv sv-gr" id="s-tok">312</span></div>
+        <div class="st"><span class="slb">min</span><span class="sv sv-mu" id="s-min">198</span></div>
+        <div class="st"><span class="slb">max</span><span class="sv sv-mu" id="s-max">541</span></div>
+        <div class="st" id="st-delta" style="display:none">
+          <span class="slb">delta</span>
+          <span class="tok-delta" id="s-delta"></span>
+        </div>
+        <div class="st"><span class="slb">cache</span><span class="sv" id="s-cache" style="color:var(--gr)">hit</span></div>
+        <div class="st"><span class="slb">vary</span><span class="sv sv-pu">2</span></div>
+        <div class="sright">
+          <div style="display:flex;align-items:center;gap:5px">
+            <div class="sconndot"></div>
+            <span class="slb" style="color:var(--mu)">:4040</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ppane closed" id="ppane">
+      <div class="ph">
+        <span class="ptitle">Params</span>
+        <button class="btn" style="margin-left:auto;padding:3px 7px;font-size:10px" onclick="toggleParams()">‹</button>
+      </div>
+      <div class="pbody">
+        <div class="pgl">Compile-time</div>
+        <div class="pr">
+          <div class="plbl"><span class="pn">@variation</span><span class="pt">enum</span><span class="lc lcc">compile</span></div>
+          <select class="pi" onchange="instantRecompile(this)"><option>a</option><option selected>b</option><option>c</option></select>
+        </div>
+        <div class="pr">
+          <div class="plbl"><span class="pn">@pattern_step</span><span class="pt">int[1..5]</span><span class="lc lcc">compile</span></div>
+          <input class="pi" type="number" value="2" min="1" max="5" onchange="instantRecompile(this)">
+        </div>
+        <div class="pr">
+          <div class="plbl"><span class="pn">@answer_depth</span><span class="pt">enum</span><span class="lc lcc">compile</span></div>
+          <select class="pi" onchange="instantRecompile(this)"><option>shallow</option><option selected>medium</option><option>deep</option></select>
+        </div>
+        <div class="pr">
+          <div class="plbl"><span class="pn">@if_input_mode_question</span><span class="pt">bool</span><span class="lc lcc">compile</span></div>
+          <select class="pi" onchange="instantRecompile(this)"><option selected>false</option><option>true</option></select>
+        </div>
+        <div class="pr">
+          <div class="plbl"><span class="pn">@skill_names</span><span class="pt">list[enum]</span><span class="lc lcc">compile</span></div>
+          <select class="pi" onchange="instantRecompile(this)"><option selected>Milton Model</option><option>Meta Model</option><option>Anchoring</option></select>
+        </div>
+        <div class="pdiv"></div>
+        <div class="pgl">Runtime</div>
+        <div class="pr">
+          <div class="plbl"><span class="pn">@user_level</span><span class="pt">enum</span><span class="lc lcr">runtime</span></div>
+          <div class="param-dropdown" data-param="rt-ul">
+            <input class="pi rt" id="rt-ul" readonly value="intermediate" onclick="toggleDropdown('rt-ul')">
+            <div class="dd-menu" id="dd-rt-ul">
+              <div class="dd-option" onclick="selectValue('rt-ul', 'beginner')">beginner student</div>
+              <div class="dd-option" onclick="selectValue('rt-ul', 'advanced')">advanced dev</div>
+              <div class="dd-divider"></div>
+              <div class="dd-option dd-add-more" onclick="openFixtureCreator('rt-ul')">+ Add more</div>
+            </div>
+          </div>
+        </div>
+        <div class="pr">
+          <div class="plbl"><span class="pn">@user_message</span><span class="pt">str</span><span class="lc lcr">runtime</span></div>
+          <div class="param-dropdown" data-param="rt-um">
+            <input class="pi rt" id="rt-um" readonly value="Can you give me an example?" onclick="toggleDropdown('rt-um')">
+            <div class="dd-menu" id="dd-rt-um">
+              <div class="dd-option" onclick="selectValue('rt-um', 'Can you give me an example?')">example request</div>
+              <div class="dd-option" onclick="selectValue('rt-um', 'Go deeper on this concept')">push for more</div>
+              <div class="dd-option" onclick="selectValue('rt-um', 'What even is NLP?')">off-topic question</div>
+              <div class="dd-divider"></div>
+              <div class="dd-option dd-add-more" onclick="openFixtureCreator('rt-um')">+ Add more</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tok-panel" id="tokpanel">
+      <div class="tp-head">
+        <span class="tp-title">Tokens</span>
+        <span class="tp-close" onclick="toggleTok()">‹</span>
+      </div>
+      <div class="tp-body">
+        <div class="tp-cards">
+          <div class="tp-card"><div class="tp-cl">Compiled</div><div class="tp-cv sv-gr" id="tp-comp">312</div></div>
+          <div class="tp-card"><div class="tp-cl">After inject</div><div class="tp-cv sv-am">387</div></div>
+          <div class="tp-card"><div class="tp-cl">Min</div><div class="tp-cv sv-mu">198</div></div>
+          <div class="tp-card"><div class="tp-cl">Max</div><div class="tp-cv sv-mu">541</div></div>
+        </div>
+        <div class="tp-sec">
+          <div class="tp-sl">Composition</div>
+          <div class="tp-track">
+            <div class="tp-seg" style="width:38%;background:var(--gr);opacity:0.75"></div>
+            <div class="tp-seg" style="width:31%;background:var(--bl);opacity:0.75"></div>
+            <div class="tp-seg" style="width:18%;background:var(--pu);opacity:0.75"></div>
+            <div class="tp-seg" style="width:13%;background:var(--am);opacity:0.7"></div>
+          </div>
+          <div class="tp-legend">
+            <div class="tp-leg"><div class="tp-legdot" style="background:var(--gr);opacity:0.75"></div>Base prompt<span class="tp-legval">118</span></div>
+            <div class="tp-leg"><div class="tp-legdot" style="background:var(--bl);opacity:0.75"></div>skill_context<span class="tp-legval">97</span></div>
+            <div class="tp-leg"><div class="tp-legdot" style="background:var(--pu);opacity:0.75"></div>Vary slots<span class="tp-legval">56</span></div>
+            <div class="tp-leg"><div class="tp-legdot" style="background:var(--am);opacity:0.7"></div>Runtime overhead<span class="tp-legval">41</span></div>
+          </div>
+        </div>
+        <div class="tp-sec">
+          <div class="tp-sl">By stage</div>
+          <div class="tp-row"><span class="tp-rl">Stage 1 — validate</span><span class="tp-rv">0</span></div>
+          <div class="tp-row"><span class="tp-rl">Stage 2 — if/case</span><span class="tp-rv">216</span></div>
+          <div class="tp-row"><span class="tp-rl">Stage 3 — fragments</span><span class="tp-rv">+97</span></div>
+          <div class="tp-row"><span class="tp-rl">Stage 4 — vary</span><span class="tp-rv">+56 (est)</span></div>
+          <div class="tp-row"><span class="tp-rl">Stage 5 — inject</span><span class="tp-rv">+75</span></div>
+        </div>
+        <div class="tp-sec">
+          <div class="tp-sl">Delta</div>
+          <div class="tp-row"><span class="tp-rl">vs last compile</span><span class="tok-delta" id="tp-delta"><span class="tok-plus">+24</span></span></div>
+          <div class="tp-row"><span class="tp-rl">vs v1 baseline</span><span class="tok-delta"><span class="tok-plus">+38</span></span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Fixture creator panels for runtime params -->
+    <div class="fixture-creator" id="fc-rt-ul">
+      <div class="fc-header">
+        <span>New fixture for @user_level</span>
+        <button onclick="closeFixtureCreator()">×</button>
+      </div>
+      <input class="fc-name" id="fc-name-rt-ul" placeholder="Fixture name (e.g. 'power user')">
+      <textarea class="fc-value" id="fc-value-rt-ul" placeholder="Value..."></textarea>
+      <button class="fc-save" onclick="saveFixture('rt-ul')">Save</button>
+    </div>
+
+    <div class="fixture-creator" id="fc-rt-um">
+      <div class="fc-header">
+        <span>New fixture for @user_message</span>
+        <button onclick="closeFixtureCreator()">×</button>
+      </div>
+      <input class="fc-name" id="fc-name-rt-um" placeholder="Fixture name (e.g. 'detailed question')">
+      <textarea class="fc-value" id="fc-value-rt-um" placeholder="Value..."></textarea>
+      <button class="fc-save" onclick="saveFixture('rt-um')">Save</button>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+const SRC=[
+  {n:1,h:'<span class="kw">@init</span> <span class="kw">do</span>'},
+  {n:2,h:'  def:'},
+  {n:3,h:'    mode: explanation'},
+  {n:4,h:'    version: <span class="vl">1</span>'},
+  {n:5,h:'  params:'},
+  {n:6,h:'    <span class="vr">@skill_names</span>: enum[Milton Model, Meta Model, Anchoring, Reframing]'},
+  {n:7,h:'    <span class="vr">@pattern_step</span>: int[<span class="vl">1</span>..<span class="vl">5</span>]'},
+  {n:8,h:'    <span class="vr">@variation</span>: enum[a, b, c]'},
+  {n:9,h:'    <span class="vr">@answer_depth</span>: enum[shallow, medium, deep]'},
+  {n:10,h:'    <span class="vr">@if_input_mode_question</span>: bool'},
+  {n:11,h:'    <span class="vr">@user_message</span>: str'},
+  {n:12,h:'    <span class="vr">@user_level</span>: enum[beginner, intermediate, advanced]'},
+  {n:13,h:'  fragments:'},
+  {n:14,h:'    <span class="fs">{skill_context}</span>: static from: skills/'},
+  {n:15,h:'    <span class="fd">{{user_history}}</span>: dynamic'},
+  {n:16,h:'<span class="kw">end</span> <span class="vr">@init</span>'},
+  {n:17,h:''},
+  {n:18,h:'<span class="cm"># ROLE</span>'},
+  {n:19,h:'You are Milton, an expert NLP trainer'},
+  {n:20,h:'teaching <span class="vr">@user_level</span> students.'},
+  {n:21,h:''},
+  {n:22,h:'<span class="kw">if</span> <span class="vr">@if_input_mode_question</span> <span class="kw">is</span> true <span class="kw">do</span>'},
+  {n:23,h:'  STOP TEACHING FLOW. Answer the user\'s question directly.'},
+  {n:24,h:'  The user asked: <span class="vr">@user_message</span>'},
+  {n:25,h:''},
+  {n:26,h:'  <span class="kw">case</span> <span class="vr">@answer_depth</span> <span class="kw">do</span>'},
+  {n:27,h:'  shallow: 1-2 sentences answering exactly what they asked.'},
+  {n:28,h:'  medium: Explanation + 1 relevant example from the context.',hl:'gr'},
+  {n:29,h:'  deep: Full explanation with multiple examples.'},
+  {n:30,h:'  <span class="kw">end</span> <span class="vr">@answer_depth</span>'},
+  {n:31,h:'<span class="kw">else</span>'},
+  {n:32,h:'  <span class="kw">vary</span> intro <span class="kw">do</span>'},
+  {n:33,h:'  a: Ground the user in what they are about to learn.'},
+  {n:34,h:'  b: Open with a question that creates productive curiosity.'},
+  {n:35,h:'  <span class="kw">end</span> vary intro'},
+  {n:36,h:'<span class="kw">end</span> <span class="vr">@if_input_mode_question</span>'},
+];
+
+const COMP_TRUE=[
+  {n:1,ann:true,group:'branch',h:'<span class="ab ab-gr">branch: if @if_input_mode_question → true</span>',chevId:'ch-branch'},
+  {n:2,h:''},
+  {n:3,h:'You are Milton, an expert NLP trainer',group:'branch',editable:true},
+  {n:4,h:'teaching <span class="rv">{{user_level}}</span> students.',group:'branch',editable:true},
+  {n:5,h:'',group:'branch'},
+  {n:6,h:'STOP TEACHING FLOW. Answer the user\'s question directly.',group:'branch',editable:true},
+  {n:7,h:'The user asked: <span class="rv">{{user_message}}</span>',group:'branch',editable:true},
+  {n:8,h:'',group:'branch'},
+  {n:9,ann:true,group:'case',h:'<span class="ab ab-gr">case @answer_depth → medium</span>',chevId:'ch-case'},
+  {n:10,h:'',group:'case'},
+  {n:11,h:'Explanation + 1 relevant example from the context.',hl:'gr',group:'case',editable:true},
+  {n:12,h:'',group:'case'},
+  {n:13,ann:true,group:'frag',h:'<span class="ab ab-bl">fragment: {skill_context} — stage 3 — 97 tok</span>',chevId:'ch-frag'},
+  {n:14,h:'<span class="fs">The Milton Model is a set of language patterns derived</span>',group:'frag'},
+  {n:15,h:'<span class="fs">from the work of Milton Erickson...</span>',group:'frag'},
+  {n:16,h:'',group:'frag'},
+  {n:17,ann:true,group:'vary',h:'<span class="ab ab-pu">vary:intro — stage 4 — 2 branches</span>',chevId:'ch-vary'},
+  {n:18,h:'<span class="va">[slot — resolves after structural cache]</span>',group:'vary'},
+  {n:19,h:''},
+  {n:20,h:'Response:',editable:true},
+  {n:21,h:'{',editable:true},
+  {n:22,h:'  "response_type": "question_answer",',editable:true},
+  {n:23,h:'  "content": "...",',editable:true},
+  {n:24,h:'  "ui_hints": { "show_answer_input": false }',editable:true},
+  {n:25,h:'}',editable:true},
+];
+
+const COMP_FALSE=[
+  {n:1,ann:true,group:'branch2',h:'<span class="ab ab-gr">branch: if @if_input_mode_question → false (else)</span>',chevId:'ch-branch2'},
+  {n:2,h:''},
+  {n:3,h:'You are Milton, an expert NLP trainer',group:'branch2',editable:true},
+  {n:4,h:'teaching <span class="rv">{{user_level}}</span> students.',group:'branch2',editable:true},
+  {n:5,h:'',group:'branch2'},
+  {n:6,ann:true,group:'vary2',h:'<span class="ab ab-pu">vary:intro — stage 4 — 2 branches</span>',chevId:'ch-vary2'},
+  {n:7,h:'<span class="va">[slot — resolves after structural cache]</span>',group:'vary2'},
+  {n:8,h:''},
+  {n:9,ann:true,group:'var3',h:'<span class="ab ab-gr">case @variation → b / case @pattern_step → 2</span>',chevId:'ch-var3'},
+  {n:10,h:''},
+  {n:11,h:'Deepening the Frame',group:'var3',editable:true,hl:'gr'},
+  {n:12,h:'Return to the user\'s own recognition from step 1.',group:'var3',editable:true},
+  {n:13,h:'Use their words to introduce the formal framing.',group:'var3',editable:true},
+  {n:14,h:''},
+  {n:15,ann:true,group:'frag2',h:'<span class="ab ab-bl">fragment: {skill_context} — stage 3 — 97 tok</span>',chevId:'ch-frag2'},
+  {n:16,h:'<span class="fs">The Milton Model is a set of language patterns...</span>',group:'frag2'},
+  {n:17,h:''},
+  {n:18,h:'<span class="rv">{{user_message}}</span>',editable:true},
+  {n:19,h:''},
+  {n:20,h:'Response:',editable:true},
+  {n:21,h:'{',editable:true},
+  {n:22,h:'  "response_type": "teaching",',editable:true},
+  {n:23,h:'  "content": "...",',editable:true},
+  {n:24,h:'  "ui_hints": { "show_answer_input": true }',editable:true},
+  {n:25,h:'}',editable:true},
+];
+
+let view='compiled',paramsOpen=false,tokOpen=false,editMode=false;
+let dirty=false,commitOpen=false,selVers='minor';
+let collapsed={};
+let activePop=null;
+let prevTok=312;
+let currentComp=COMP_TRUE;
+
+function render(){
+  const lines=view==='source'?SRC:currentComp;
+  const ced=document.getElementById('ced');
+  ced.className='ced'+(editMode?' edit-mode':'');
+  ced.innerHTML=lines.map(l=>{
+    if(l.collapse&&collapsed[l.group])return'';
+    let cls='cl';
+    if(l.ann)cls+=' ann';
+    else if(l.hl==='gr')cls+=' hl-gr';
+    else if(l.hl==='am')cls+=' hl-am';
+    if(!l.ann&&l.group&&collapsed[l.group])return'';
+    const edAttr=(editMode&&l.editable&&!l.ann)?'contenteditable="true" data-editable':'';
+    const chevron=l.ann?`<span class="chev${collapsed[l.group]?'':' open'}" data-group="${l.group}" onclick="toggleCollapse('${l.group}',event)">›</span>`:'';
+    return `<div class="${cls}" data-group="${l.group||''}" data-ann="${l.ann?'1':''}"><span class="ln">${l.n}</span><span class="cc" ${edAttr}>${l.h}${chevron}</span></div>`;
+  }).join('');
+}
+
+function toggleCollapse(group,e){
+  e&&e.stopPropagation();
+  collapsed[group]=!collapsed[group];
+  render();
+}
+
+function setView(v){
+  view=v;
+  document.getElementById('vs').classList.toggle('on',v==='source');
+  document.getElementById('vc').classList.toggle('on',v==='compiled');
+  document.getElementById('sbanner').classList.toggle('show',v==='compiled'&&dirty);
+  if(v==='source'){
+    document.getElementById('editbtn').style.display='none';
+  } else {
+    document.getElementById('editbtn').style.display='';
+  }
+  render();
+}
+
+function toggleEdit(){
+  editMode=!editMode;
+  const btn=document.getElementById('editbtn');
+  btn.className=editMode?'btn btn-edit':'btn';
+  btn.textContent=editMode?'Editing':'Edit';
+  render();
+  if(editMode)dirty=true;
+  if(editMode&&view==='compiled')document.getElementById('sbanner').classList.add('show');
+}
+
+function toggleParams(){
+  paramsOpen=!paramsOpen;
+  document.getElementById('ppane').classList.toggle('closed',!paramsOpen);
+  document.getElementById('ptogbtn').textContent=paramsOpen?'Params ‹':'Params ›';
+  closeAllDropdowns();
+  closeAllFixtureCreators();
+}
+
+function toggleTok(){
+  tokOpen=!tokOpen;
+  const tp=document.getElementById('tokpanel');
+  tp.classList.toggle('open',tokOpen);
+  document.getElementById('tokbtn').textContent=tokOpen?'Tokens ‹':'Tokens ›';
+}
+
+function instantRecompile(el){
+  const newTok=Math.floor(280+Math.random()*80);
+  const delta=newTok-prevTok;
+  const sDelta=document.getElementById('s-delta');
+  const stDelta=document.getElementById('st-delta');
+  stDelta.style.display='flex';
+  if(delta>0){
+    sDelta.innerHTML=`<span class="tok-plus">+${delta}</span>`;
+  } else if(delta<0){
+    sDelta.innerHTML=`<span class="tok-minus">${delta}</span>`;
+  } else {
+    sDelta.innerHTML=`<span class="sv-mu">±0</span>`;
+  }
+  document.getElementById('s-tok').textContent=newTok;
+  document.getElementById('tp-comp').textContent=newTok;
+  prevTok=newTok;
+  document.getElementById('s-cache').textContent='miss';
+  document.getElementById('s-cache').style.color='var(--co)';
+  const ifParam=document.querySelector('select.pi[onchange]');
+  const allSelects=document.querySelectorAll('select.pi');
+  let ifVal='false';
+  allSelects.forEach(s=>{
+    if(s.options[0]&&(s.options[0].value==='false'||s.innerHTML.includes('false'))){
+      ifVal=s.value||s.options[s.selectedIndex].text;
+    }
+  });
+  currentComp=COMP_FALSE;
+  allSelects.forEach(s=>{
+    const opts=Array.from(s.options).map(o=>o.text);
+    if(opts.includes('true')&&opts.includes('false')){
+      currentComp=s.options[s.selectedIndex].text==='true'?COMP_TRUE:COMP_FALSE;
+    }
+  });
+  setTimeout(()=>{
+    document.getElementById('s-cache').textContent='hit';
+    document.getElementById('s-cache').style.color='var(--gr)';
+    if(view==='compiled')render();
+  },180);
+}
+
+function markDirty(){
+  dirty=true;
+  if(view==='compiled')document.getElementById('sbanner').classList.add('show');
+}
+
+function discard(){
+  dirty=false;editMode=false;
+  document.getElementById('sbanner').classList.remove('show');
+  document.getElementById('crow').classList.remove('show');
+  commitOpen=false;
+  const btn=document.getElementById('editbtn');
+  btn.className='btn';btn.textContent='Edit';
+  render();
+}
+
+function showCommit(){document.getElementById('crow').classList.add('show');}
+function hideCommit(){document.getElementById('crow').classList.remove('show');}
+
+function selVer(v){
+  selVers=v;
+  ['patch','minor','major'].forEach(x=>document.getElementById('v'+x[0]).classList.toggle('on',x===v));
+  const m={patch:'v1.0.<span>1</span>',minor:'v1.<span>1</span>',major:'<span>v2</span>'};
+  document.getElementById('vprev').innerHTML='v1 → '+m[v];
+}
+
+function doCommit(){
+  discard();hideCommit();
+}
+
+let activePops={};
+function openPop(pid,inputId){
+  // Legacy - redirect to dropdown
+  const paramId = inputId;
+  toggleDropdown(paramId);
+}
+
+// Dropdown functions for runtime params
+function toggleDropdown(paramId) {
+  closeAllDropdowns();
+  closeAllFixtureCreators();
+  const menu = document.getElementById('dd-' + paramId);
+  if (menu) menu.classList.toggle('open');
+}
+
+function closeAllDropdowns() {
+  document.querySelectorAll('.dd-menu.open').forEach(m => m.classList.remove('open'));
+}
+
+// Select a value from dropdown
+function selectValue(paramId, value) {
+  document.getElementById(paramId).value = value;
+  closeAllDropdowns();
+  // Trigger any needed recompile or update
+}
+
+// Fixture creator functions
+function openFixtureCreator(paramId) {
+  closeAllDropdowns();
+  const fc = document.getElementById('fc-' + paramId);
+  if (fc) {
+    // Position the fixture creator relative to the param
+    const pr = document.querySelector(`.param-dropdown[data-param="${paramId}"]`);
+    if (pr) {
+      const prRect = pr.getBoundingClientRect();
+      const workEl = document.getElementById('work');
+      const workRect = workEl.getBoundingClientRect();
+      fc.style.top = Math.max(0, prRect.top - workRect.top - 10) + 'px';
+    }
+    fc.classList.add('open');
+  }
+}
+
+function closeFixtureCreator(paramId) {
+  if (paramId) {
+    const fc = document.getElementById('fc-' + paramId);
+    if (fc) fc.classList.remove('open');
+  } else {
+    closeAllFixtureCreators();
+  }
+}
+
+function closeAllFixtureCreators() {
+  document.querySelectorAll('.fixture-creator.open').forEach(fc => fc.classList.remove('open'));
+}
+
+// Save fixture and add to dropdown
+function saveFixture(paramId) {
+  const fc = document.getElementById('fc-' + paramId);
+  const nameInput = fc.querySelector('.fc-name');
+  const valueInput = fc.querySelector('.fc-value');
+  const name = nameInput.value.trim();
+  const value = valueInput.value.trim();
+  if (!name || !value) return;
+  
+  addToDropdown(paramId, name, value);
+  
+  // Clear inputs and close
+  nameInput.value = '';
+  valueInput.value = '';
+  closeFixtureCreator(paramId);
+}
+
+// Add a new fixture to the dropdown
+function addToDropdown(paramId, name, value) {
+  const menu = document.getElementById('dd-' + paramId);
+  if (!menu) return;
+  
+  // Find the "Add more" option and insert before it
+  const addMoreOption = menu.querySelector('.dd-add-more');
+  const divider = menu.querySelector('.dd-divider');
+  
+  const option = document.createElement('div');
+  option.className = 'dd-option';
+  option.textContent = name;
+  option.onclick = function() { selectValue(paramId, value); };
+  
+  // Insert after the last regular option (before divider if exists)
+  if (divider && divider.parentNode === menu) {
+    menu.insertBefore(option, divider);
+  } else if (addMoreOption && addMoreOption.parentNode === menu) {
+    menu.insertBefore(option, addMoreOption);
+  } else {
+    menu.appendChild(option);
+  }
+}
+
+// Close dropdowns when clicking outside
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.param-dropdown')) closeAllDropdowns();
+  if (!e.target.closest('.fixture-creator') && !e.target.closest('.dd-add-more')) closeAllFixtureCreators();
+});
+
+selVer('minor');
+setView('compiled');
+</script>

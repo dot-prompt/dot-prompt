@@ -1,0 +1,6 @@
+init do
+  @version: 1
+  def:
+    mode: fragment
+end init
+{% if greeting %}{{greeting}}{% else %}Default greeting{% endif %}

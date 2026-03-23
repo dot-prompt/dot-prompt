@@ -1,0 +1,26 @@
+init do
+  @version: 1
+
+  params:
+    @name: str
+    @user_level: enum[beginner, intermediate, advanced]
+    @time_of_day: enum[morning, afternoon, evening]
+
+  fragments:
+    @combined_greeting:
+      type: static
+      from: fragments/combined_greeting
+      doc: "A fragment that references other fragments"
+end init
+
+# Combined Greeting Fragment
+This greeting combines multiple fragments:
+
+{fragments/simple_greeting}
+
+{fragments/personalized_greeting}
+
+{fragments/conditional_greeting}
+
+---
+End of combined greeting.

@@ -1,0 +1,9 @@
+init do
+  @version: 1
+  def:
+    mode: fragment
+    match: Personalized Greeting
+  params:
+    @name: string
+end init
+Hello, {{name}}!

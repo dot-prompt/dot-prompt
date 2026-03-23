@@ -1,0 +1,14 @@
+{
+  "name": "dot-prompt-assets",
+  "version": "0.1.0",
+  "dependencies": {
+    "phoenix": "^1.8.0",
+    "phoenix_live_view": "^1.0.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.20.0"
+  },
+  "scripts": {
+    "build": "esbuild js/app.js --bundle --outdir=../priv/static --minify --sourcemap"
+  }
+}

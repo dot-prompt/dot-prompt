@@ -1,0 +1,14 @@
+version: "3.8"
+services:
+  dot-prompt:
+    build: .
+    ports:
+      - "4040:4040"  # viewer
+      - "4041:4041"  # HTTP API
+    volumes:
+      - ./prompts:/prompts
+    environment:
+      - MIX_ENV=dev
+      - PORT=4040
+      - PROMPTS_DIR=/prompts
+      - PHX_SERVER=true

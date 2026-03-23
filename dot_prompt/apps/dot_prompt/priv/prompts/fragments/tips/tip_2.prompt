@@ -1,0 +1,14 @@
+init do
+  @version: 1
+
+  params:
+    @topic: str
+
+  fragments:
+    @tip_2:
+      match: productivity
+      doc: "Second productivity tip"
+end init
+
+# Tip 2: Time Blocking
+Use time blocking to dedicate specific hours to deep work. Batch similar tasks together.

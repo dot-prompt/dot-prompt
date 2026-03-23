@@ -1,0 +1,5 @@
+init do
+  @version: 1
+end init
+this is invalid content
+invalid syntax here

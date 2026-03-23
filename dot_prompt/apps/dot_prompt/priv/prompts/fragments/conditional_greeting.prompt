@@ -1,0 +1,26 @@
+init do
+  @version: 1
+
+  params:
+    @user_level: enum[beginner, intermediate, advanced]
+    @name: str
+
+  fragments:
+    @conditional_greeting:
+      type: static
+      from: fragments/conditional_greeting
+      doc: "A greeting fragment with conditional logic"
+end init
+
+# Conditional Greeting Fragment
+
+if @user_level is beginner do
+Welcome, @name! You're just starting your journey.
+We recommend beginning with our introductory materials.
+else if @user_level is intermediate do
+Welcome back, @name! You've made great progress.
+Check out our intermediate resources to continue growing.
+else
+Welcome, expert @name! You're ready for advanced challenges.
+Explore our expert-level content and contribute to the community.
+end @user_level

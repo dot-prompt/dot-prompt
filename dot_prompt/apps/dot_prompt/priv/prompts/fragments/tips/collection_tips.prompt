@@ -1,0 +1,20 @@
+init do
+  @version: 1
+
+  params:
+    @topic: str
+
+  fragments:
+    @collection_tips:
+      type: static
+      from: fragments/tips/collection_tips
+      doc: "A fragment with collection iteration - iterates over all .prompt files in a folder"
+end init
+
+# Tips Collection Fragment
+This fragment iterates over all .prompt files in the tips folder:
+
+{fragments/tips/}
+
+---
+All tips above were collected from the tips/ folder.

@@ -1,0 +1,18 @@
+init do
+  @version: 1
+
+  params:
+    @name: str
+    @time_of_day: enum[morning, afternoon, evening]
+
+  fragments:
+    @personalized_greeting:
+      type: static
+      from: fragments/personalized_greeting
+      doc: "A greeting fragment with variable interpolation"
+end init
+
+# Personalized Greeting Fragment
+Good @time_of_day, @name! 
+We're glad you're here today.
+Your name has @name.length characters.
