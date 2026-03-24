@@ -1625,72 +1625,8 @@ defmodule DotPromptServerWeb.DevUI do
 
     if file_name != socket.assigns.active_file do
       content = load_prompt_file(file_name)
-
-      # Load stored runtime params
-      stored_runtime = DotPromptServer.RuntimeStorage.get_params(file_name)
-
-      # Handle direct name/value overrides from URL if present
-      url_runtime =
-        case {params["name"], params["value"]} do
-          {n, v} when is_binary(n) and is_binary(v) ->
-            # Save it to storage too so it persists
-            DotPromptServer.RuntimeStorage.put_param(n, v, file_name)
-            %{n => v}
-
-          _ ->
-            %{}
-        end
-
-      runtime_params = Map.merge(stored_runtime, url_runtime)
-
-      {active_schema, compile_params, error_msg} =
-        case DotPrompt.schema(file_name) do
-          {:ok, schema} ->
-            default_params =
-              schema.params
-              |> Enum.reject(fn {_, spec} -> spec.lifecycle == :runtime end)
-              |> Enum.into(%{}, fn {k, spec} ->
-                default =
-                  case spec.type do
-                    :enum ->
-                      values = Map.get(spec, :values, [])
-                      default = Map.get(spec, :default)
-
-                      cond do
-                        default != nil -> default
-                        values != [] and values != nil -> List.first(values)
-                        true -> ""
-                      end
-
-                    type when type in [:list, :list_enum, :list_str, :list_int] ->
-                      values = Map.get(spec, :values, [])
-                      default = Map.get(spec, :default)
-
-                      cond do
-                        is_list(default) -> default
-                        default != nil -> [default]
-                        values != [] and values != nil -> [List.first(values)]
-                        true -> []
-                      end
-
-                    :bool ->
-                      true
-
-                    _ ->
-                      Map.get(spec, :default, "")
-                  end
-
-                {to_string(k), default}
-              end)
-
-            {schema, default_params, nil}
-
-          {:error, %{message: msg}} ->
-            {nil, %{}, msg}
-
-          _ ->
-            {nil, %{}, nil}
-        end
+      runtime_params = load_runtime_params(file_name, params)
+      {active_schema, compile_params, error_msg} = load_schema_and_params(file_name)
 
       socket =
         socket
@@ -1725,6 +1661,76 @@ defmodule DotPromptServerWeb.DevUI do
       end
     else
       {:noreply, socket}
+    end
+  end
+
+  defp load_runtime_params(file_name, params) do
+    stored_runtime = DotPromptServer.RuntimeStorage.get_params(file_name)
+
+    url_runtime =
+      case {params["name"], params["value"]} do
+        {n, v} when is_binary(n) and is_binary(v) ->
+          DotPromptServer.RuntimeStorage.put_param(n, v, file_name)
+          %{n => v}
+
+        _ ->
+          %{}
+      end
+
+    Map.merge(stored_runtime, url_runtime)
+  end
+
+  defp load_schema_and_params(file_name) do
+    case DotPrompt.schema(file_name) do
+      {:ok, schema} ->
+        default_params = build_default_params(schema.params)
+        {schema, default_params, nil}
+
+      {:error, %{message: msg}} ->
+        {nil, %{}, msg}
+
+      _ ->
+        {nil, %{}, nil}
+    end
+  end
+
+  defp build_default_params(params) do
+    params
+    |> Enum.reject(fn {_, spec} -> spec.lifecycle == :runtime end)
+    |> Enum.into(%{}, fn {k, spec} ->
+      default = get_param_default(spec)
+      {to_string(k), default}
+    end)
+  end
+
+  defp get_param_default(spec) do
+    case spec.type do
+      :enum ->
+        values = Map.get(spec, :values, [])
+        default = Map.get(spec, :default)
+
+        cond do
+          default != nil -> default
+          values != [] and values != nil -> List.first(values)
+          true -> ""
+        end
+
+      type when type in [:list, :list_enum, :list_str, :list_int] ->
+        values = Map.get(spec, :values, [])
+        default = Map.get(spec, :default)
+
+        cond do
+          is_list(default) -> default
+          default != nil -> [default]
+          values != [] and values != nil -> [List.first(values)]
+          true -> []
+        end
+
+      :bool ->
+        true
+
+      _ ->
+        Map.get(spec, :default, "")
     end
   end
 

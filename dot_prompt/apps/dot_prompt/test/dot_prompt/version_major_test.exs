@@ -1,6 +1,8 @@
 defmodule DotPrompt.VersionMajorTest do
   use ExUnit.Case, async: false
 
+  alias DotPrompt.Parser.{Lexer, Parser}
+
   describe "@major version field in init block" do
     test "parses @major field in init" do
       content = """
@@ -12,8 +14,8 @@ defmodule DotPrompt.VersionMajorTest do
       Test prompt.
       """
 
-      tokens = DotPrompt.Parser.Lexer.tokenize(content)
-      assert {:ok, ast} = DotPrompt.Parser.Parser.parse(tokens)
+      tokens = Lexer.tokenize(content)
+      assert {:ok, ast} = Parser.parse(tokens)
       assert ast.init.def.major == 1
       assert ast.init.def.version == 1
     end
@@ -28,8 +30,8 @@ defmodule DotPrompt.VersionMajorTest do
       Test prompt.
       """
 
-      tokens = DotPrompt.Parser.Lexer.tokenize(content)
-      assert {:ok, ast} = DotPrompt.Parser.Parser.parse(tokens)
+      tokens = Lexer.tokenize(content)
+      assert {:ok, ast} = Parser.parse(tokens)
 
       assert ast.init.def.major == 2
       # @version stores major.minor format as string
@@ -45,8 +47,8 @@ defmodule DotPrompt.VersionMajorTest do
       Test prompt.
       """
 
-      tokens = DotPrompt.Parser.Lexer.tokenize(content)
-      assert {:ok, ast} = DotPrompt.Parser.Parser.parse(tokens)
+      tokens = Lexer.tokenize(content)
+      assert {:ok, ast} = Parser.parse(tokens)
       # Should default to major: 1 for backward compatibility
       assert ast.init.def.version == 1
     end
@@ -61,8 +63,8 @@ defmodule DotPrompt.VersionMajorTest do
       Test prompt.
       """
 
-      tokens = DotPrompt.Parser.Lexer.tokenize(content)
-      assert {:error, _} = DotPrompt.Parser.Parser.parse(tokens)
+      tokens = Lexer.tokenize(content)
+      assert {:error, _} = Parser.parse(tokens)
     end
   end
 
@@ -75,8 +77,8 @@ defmodule DotPrompt.VersionMajorTest do
       end init
       """
 
-      tokens = DotPrompt.Parser.Lexer.tokenize(content)
-      assert {:ok, ast} = DotPrompt.Parser.Parser.parse(tokens)
+      tokens = Lexer.tokenize(content)
+      assert {:ok, ast} = Parser.parse(tokens)
 
       assert ast.init.def.version == "1.5"
     end
@@ -89,8 +91,8 @@ defmodule DotPrompt.VersionMajorTest do
       end init
       """
 
-      tokens = DotPrompt.Parser.Lexer.tokenize(content)
-      assert {:ok, ast} = DotPrompt.Parser.Parser.parse(tokens)
+      tokens = Lexer.tokenize(content)
+      assert {:ok, ast} = Parser.parse(tokens)
 
       assert ast.init.def.version == "1.5.2"
     end
@@ -103,8 +105,8 @@ defmodule DotPrompt.VersionMajorTest do
       end init
       """
 
-      tokens = DotPrompt.Parser.Lexer.tokenize(content)
-      assert {:ok, ast} = DotPrompt.Parser.Parser.parse(tokens)
+      tokens = Lexer.tokenize(content)
+      assert {:ok, ast} = Parser.parse(tokens)
 
       assert ast.init.def.version == 3
     end

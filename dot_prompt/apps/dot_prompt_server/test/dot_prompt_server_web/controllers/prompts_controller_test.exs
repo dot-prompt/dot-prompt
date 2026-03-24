@@ -4,7 +4,7 @@ defmodule DotPromptServerWeb.PromptsControllerTest do
   @prompts_dir Path.expand("test/fixtures/prompts_api", File.cwd!())
 
   setup_all do
-    # Application.put_env is global, so be careful. 
+    # Application.put_env is global, so be careful.
     # But since we run tests sequentially (async: false), it should be fine.
     original_dir = Application.get_env(:dot_prompt, :prompts_dir)
     Application.put_env(:dot_prompt, :prompts_dir, @prompts_dir)

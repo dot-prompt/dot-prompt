@@ -5,7 +5,7 @@ defmodule DotPrompt do
   require Logger
 
   alias DotPrompt.Parser.{Lexer, Parser, Validator}
-  alias DotPrompt.Compiler.{CaseResolver, IfResolver, VaryCompositor}
+  alias DotPrompt.Compiler.{CaseResolver, IfResolver, VaryCompositor, ResponseCollector}
   alias DotPrompt.Compiler.FragmentExpander.Collection, as: FragmentCollection
   alias DotPrompt.Compiler.FragmentExpander.Dynamic, as: FragmentDynamic
   alias DotPrompt.Compiler.FragmentExpander.Static, as: FragmentStatic
@@ -446,14 +446,14 @@ defmodule DotPrompt do
   end
 
   defp handle_response_contracts(body, warnings) do
-    response_blocks = DotPrompt.Compiler.ResponseCollector.collect_response_blocks(body)
+    response_blocks = ResponseCollector.collect_response_blocks(body)
 
     schemas =
       Enum.map(response_blocks, fn {content, _line} ->
-        DotPrompt.Compiler.ResponseCollector.derive_schema(content)
+        ResponseCollector.derive_schema(content)
       end)
 
-    comparison = DotPrompt.Compiler.ResponseCollector.compare_schemas(schemas)
+    comparison = ResponseCollector.compare_schemas(schemas)
 
     case comparison do
       :incompatible ->

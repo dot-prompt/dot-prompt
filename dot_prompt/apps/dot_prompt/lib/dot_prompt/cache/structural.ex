@@ -23,6 +23,16 @@ defmodule DotPrompt.Cache.Structural do
     {:ok, %{}}
   end
 
+  def init do
+    :ets.new(@table, [
+      :set,
+      :public,
+      :named_table,
+      read_concurrency: true,
+      write_concurrency: :auto
+    ])
+  end
+
   @doc """
   Gets cached skeleton and metadata for the given key.
   """

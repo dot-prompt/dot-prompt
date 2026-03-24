@@ -15,18 +15,18 @@ const promptExample = `init do
 end init
 
 if @is_question is true do
-Answer the user's question directly.
+  Answer the user's question directly
 else
 
 case @variation do
-analogy: Use an analogy to explain.
-recognition: Ask a guiding question.
+  analogy: Use an analogy to explain
+  recognition: Ask a guiding question
 end @variation
 
 case @depth do
-shallow: Give a short answer.
-medium: Give a moderate answer with one example.
-deep: Give a thorough answer with multiple examples.
+  shallow: Give a short answer.
+  medium: Give a moderate answer with one example.
+  deep: Give a thorough answer with multiple examples.
 end @depth
 
 end @is_question

@@ -97,94 +97,69 @@ function escapeHtml(str: string): string {
 </script>
 
 <style is:global>
-  /* Shiki / Astro Code Theme Management */
-  .shiki,
-  .astro-code {
-    background-color: var(--shiki-light-bg) !important;
-    color: var(--shiki-light) !important;
-  }
-  
-  /* In dark mode, swap to shiki-dark variables */
-  .dark .shiki,
-  .dark .astro-code {
-    background-color: var(--shiki-dark-bg) !important;
-    color: var(--shiki-dark) !important;
-  }
-
-  /* Specific token overrides for dark mode */
-  .dark .shiki span,
-  .dark .astro-code span {
-    color: var(--shiki-dark) !important;
-    /* Inherit font styles unless shiki-dark-font-style is defined */
-    font-style: var(--shiki-dark-font-style, inherit) !important;
-    font-weight: var(--shiki-dark-font-weight, inherit) !important;
-    text-decoration: var(--shiki-dark-text-decoration, inherit) !important;
-  }
-
-  /* Ensure pre doesn't lose indentation and has correct display */
+  /* Basic Code Block Reset */
   pre.shiki,
   pre.astro-code {
-    white-space: pre !important;
+    white-space: pre-wrap !important;
+    word-break: break-word !important;
+    overflow-wrap: anywhere !important;
     display: block !important;
     margin: 0 !important;
-    padding: 1.25rem 2rem !important;
+    padding: 1.5rem !important;
+    background-color: transparent !important;
   }
 
-  /* DotPrompt base text color */
-  pre.astro-code > code {
-    color: #24292e !important;
+  /* DotPrompt base text color & Fallback for Shiki tokens */
+  pre.astro-code,
+  pre.astro-code code,
+  pre.astro-code span:not([class^="token-"]),
+  pre.shiki,
+  pre.shiki code,
+  pre.shiki span:not([class^="token-"]) {
+    background-color: transparent !important;
+    color: var(--color-text) !important;
   }
-  .dark pre.astro-code > code {
-    color: #e1e4e8 !important;
+  
+  /* Reset Shiki defaults that might interfere */
+  pre.shiki {
+    background-color: transparent !important;
   }
 
-  /* DotPrompt custom highlighting */
-  .token-keyword {
-    color: #7c3aed;
+  /* DotPrompt custom highlighting - Indigo Theme */
+  /* Using higher specificity to ensure victory over Shiki inline styles */
+  .astro-code .token-keyword, .shiki .token-keyword {
+    color: #818CF8 !important; /* Indigo 400 */
     font-weight: 600;
   }
-  .token-label {
-    color: #0891b2;
+  .astro-code .token-label, .shiki .token-label {
+    color: #2DD4BF !important; /* Teal 400 */
     font-weight: 500;
   }
-  .token-variable {
-    color: #c2410c;
+  .astro-code .token-variable, .shiki .token-variable {
+    color: #FDBA74 !important; /* Orange 300 */
     font-weight: 500;
   }
-  .token-boolean {
-    color: #047857;
+  .astro-code .token-boolean, .shiki .token-boolean {
+    color: #34D399 !important; /* Emerald 400 */
   }
-  .token-comment {
-    color: #737373;
-    font-style: normal;
+  .astro-code .token-comment, .shiki .token-comment {
+    color: #636370 !important; /* Muted warm */
+    font-style: italic;
   }
-  .token-interpolation {
-    color: #be123c;
+  .astro-code .token-interpolation, .shiki .token-interpolation {
+    color: #F472B6 !important; /* Pink 400 */
     font-weight: 500;
   }
-  .token-braces {
-    color: #0f766e;
+  .astro-code .token-braces, .shiki .token-braces {
+    color: #818CF8 !important;
+    opacity: 0.8;
   }
 
-  html.dark .token-keyword {
-    color: #a78bfa !important;
-  }
-  html.dark .token-label {
-    color: #22d3ee !important;
-  }
-  html.dark .token-variable {
-    color: #fb923c !important;
-  }
-  html.dark .token-boolean {
-    color: #34d399 !important;
-  }
-  html.dark .token-comment {
-    color: #a3a3a3 !important;
-  }
-  html.dark .token-interpolation {
-    color: #fb7185 !important;
-  }
-  html.dark .token-braces {
-    color: #2dd4bf !important;
+  /* Ensure consistent spacing and wrapping */
+  pre.astro-code, pre.shiki {
+    padding: 1.5rem !important;
+    margin: 0 !important;
+    font-size: 0.875rem !important;
+    line-height: 1.7 !important;
   }
 </style>

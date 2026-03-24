@@ -6,6 +6,8 @@ defmodule DotPromptServer.FileWatcher do
   use GenServer
   require Logger
 
+  alias DotPrompt.Cache.Fragment
+
   def start_link(opts) do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   end
@@ -35,7 +37,7 @@ defmodule DotPromptServer.FileWatcher do
 
         Logger.info("dot-prompt: invalidating cache for #{prompt_name} due to file change")
         DotPrompt.invalidate_cache(prompt_name)
-        DotPrompt.Cache.Fragment.invalidate_path(prompt_name)
+        Fragment.invalidate_path(prompt_name)
       end
     end
 

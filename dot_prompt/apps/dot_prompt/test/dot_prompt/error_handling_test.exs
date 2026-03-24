@@ -328,7 +328,7 @@ defmodule DotPrompt.ErrorHandlingTest do
       end
       """
 
-      # Parser or Validator should catch this. 
+      # Parser or Validator should catch this.
       # With current lexer, 'vary do' might not match vary_start.
       assert {:error, _} = DotPrompt.compile(content, %{style: "formal"})
     end

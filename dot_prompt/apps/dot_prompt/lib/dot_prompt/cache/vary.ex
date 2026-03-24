@@ -23,6 +23,16 @@ defmodule DotPrompt.Cache.Vary do
     {:ok, %{}}
   end
 
+  def init do
+    :ets.new(@table, [
+      :set,
+      :public,
+      :named_table,
+      read_concurrency: true,
+      write_concurrency: :auto
+    ])
+  end
+
   def get(prompt_name, vary_name, branch_id) do
     key = {to_string(prompt_name), to_string(vary_name), to_string(branch_id)}
 

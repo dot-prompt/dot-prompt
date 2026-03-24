@@ -57,96 +57,104 @@ defmodule DotPrompt.Parser.Parser do
         {:ok, acc, rest}
 
       :init_item when token.value == "major" ->
-        case Integer.parse(token.meta) do
-          {val, ""} when val >= 1 ->
-            new_def = Map.put(acc.def, :major, val)
-            parse_init_block(rest, %{acc | def: new_def})
-
-          _ ->
-            {:error, "Invalid @major value: #{token.meta} - must be a positive integer"}
-        end
+        handle_major_token(token, rest, acc)
 
       :init_item when token.value == "version" ->
-        # Handle @version: 1 or version: 1 (lexer might tokenise @version as param_def but we check both)
-        # Support both integer and major.minor format
-        case Integer.parse(token.meta) do
-          {val, ""} ->
-            new_def = Map.put(acc.def, :version, val)
-            new_params = Map.put(acc.params, "@version", %{type: token.meta, doc: nil})
-            parse_init_block(rest, %{acc | def: new_def, params: new_params})
-
-          _ ->
-            new_def = Map.put(acc.def, :version, token.meta)
-            new_params = Map.put(acc.params, "@version", %{type: token.meta, doc: nil})
-            parse_init_block(rest, %{acc | def: new_def, params: new_params})
-        end
+        handle_version_token(token, rest, acc)
 
       :init_item ->
         new_def = Map.put(acc.def, safe_to_atom(token.value), token.meta)
         parse_init_block(rest, %{acc | def: new_def})
 
       :case_label ->
-        {indented, remaining} = take_indented(rest, token.indent)
-        acc = %{acc | def: Map.put(acc.def, safe_to_atom(token.value), token.meta || "")}
-
-        case process_init_label(token.value, indented, acc) do
-          {:ok, new_acc} -> parse_init_block(remaining, new_acc)
-          {:error, _} = err -> err
-        end
+        handle_case_label_token(token, rest, acc)
 
       :param_def when token.value == "@version" ->
-        # Plan v1.1: @version is top level in init
-        # Support both integer and major.minor format
-        case Integer.parse(token.meta) do
-          {val, ""} ->
-            new_def = Map.put(acc.def, :version, val)
-            new_params = Map.put(acc.params, "@version", %{type: token.meta, doc: nil})
-            parse_init_block(rest, %{acc | def: new_def, params: new_params})
-
-          _ ->
-            new_def = Map.put(acc.def, :version, token.meta)
-            new_params = Map.put(acc.params, "@version", %{type: token.meta, doc: nil})
-            parse_init_block(rest, %{acc | def: new_def, params: new_params})
-        end
+        handle_version_token(token, rest, acc)
 
       :param_def ->
-        {indented, rest} = take_indented(rest, token.indent)
-        {doc_cont, rest} = take_doc(rest)
-
-        # Continuation lines indented under param/fragment are part of docs in v1.1
-        doc =
-          cond do
-            indented != [] -> Enum.map_join(indented, "\n", &token_to_string_raw/1)
-            doc_cont != nil -> doc_cont
-            true -> nil
-          end
-
-        new_params = Map.put(acc.params, token.value, %{type: token.meta, doc: doc})
-        parse_init_block(rest, %{acc | params: new_params})
+        handle_param_def_token(token, rest, acc)
 
       :fragment_def ->
-        {indented, rest} = take_indented(rest, token.indent)
-        {_doc_cont, rest} = take_doc(rest)
-
-        # Validator expects a single string to parse type, from, and rules
-        meta =
-          if indented == [] do
-            token.meta
-          else
-            token.meta <> "\n" <> Enum.map_join(indented, "\n", &token_to_string_raw/1)
-          end
-
-        new_fragments = Map.put(acc.fragments, token.value, %{type: meta, doc: nil})
-        parse_init_block(rest, %{acc | fragments: new_fragments})
+        handle_fragment_def_token(token, rest, acc)
 
       :block_start when token.value == "docs" ->
-        case parse_docs_block(rest, "") do
-          {:error, _} = err -> err
-          {docs_text, rest} -> parse_init_block(rest, %{acc | docs: docs_text})
-        end
+        handle_docs_token(token, rest, acc)
 
       _ ->
         parse_init_block(rest, acc)
+    end
+  end
+
+  defp handle_major_token(token, rest, acc) do
+    case Integer.parse(token.meta) do
+      {val, ""} when val >= 1 ->
+        new_def = Map.put(acc.def, :major, val)
+        parse_init_block(rest, %{acc | def: new_def})
+
+      _ ->
+        {:error, "Invalid @major value: #{token.meta} - must be a positive integer"}
+    end
+  end
+
+  defp handle_version_token(token, rest, acc) do
+    case Integer.parse(token.meta) do
+      {val, ""} ->
+        new_def = Map.put(acc.def, :version, val)
+        new_params = Map.put(acc.params, "@version", %{type: token.meta, doc: nil})
+        parse_init_block(rest, %{acc | def: new_def, params: new_params})
+
+      _ ->
+        new_def = Map.put(acc.def, :version, token.meta)
+        new_params = Map.put(acc.params, "@version", %{type: token.meta, doc: nil})
+        parse_init_block(rest, %{acc | def: new_def, params: new_params})
+    end
+  end
+
+  defp handle_case_label_token(token, rest, acc) do
+    {indented, remaining} = take_indented(rest, token.indent)
+    acc = %{acc | def: Map.put(acc.def, safe_to_atom(token.value), token.meta || "")}
+
+    case process_init_label(token.value, indented, acc) do
+      {:ok, new_acc} -> parse_init_block(remaining, new_acc)
+      {:error, _} = err -> err
+    end
+  end
+
+  defp handle_param_def_token(token, rest, acc) do
+    {indented, rest} = take_indented(rest, token.indent)
+    {doc_cont, rest} = take_doc(rest)
+
+    doc =
+      cond do
+        indented != [] -> Enum.map_join(indented, "\n", &token_to_string_raw/1)
+        doc_cont != nil -> doc_cont
+        true -> nil
+      end
+
+    new_params = Map.put(acc.params, token.value, %{type: token.meta, doc: doc})
+    parse_init_block(rest, %{acc | params: new_params})
+  end
+
+  defp handle_fragment_def_token(token, rest, acc) do
+    {indented, rest} = take_indented(rest, token.indent)
+    {_doc_cont, rest} = take_doc(rest)
+
+    meta =
+      if indented == [] do
+        token.meta
+      else
+        token.meta <> "\n" <> Enum.map_join(indented, "\n", &token_to_string_raw/1)
+      end
+
+    new_fragments = Map.put(acc.fragments, token.value, %{type: meta, doc: nil})
+    parse_init_block(rest, %{acc | fragments: new_fragments})
+  end
+
+  defp handle_docs_token(_token, rest, acc) do
+    case parse_docs_block(rest, "") do
+      {:error, _} = err -> err
+      {docs_text, rest} -> parse_init_block(rest, %{acc | docs: docs_text})
     end
   end
 
@@ -275,23 +283,10 @@ defmodule DotPrompt.Parser.Parser do
   defp parse_nodes([token | rest], acc, context) do
     case token.type do
       :text ->
-        trimmed = String.trim(token.value)
-        is_branch = trimmed != "" and Regex.match?(~r/^\w+:.*$/, trimmed)
-
-        if context == "BRANCH_CONTENT" and is_branch do
-          {Enum.reverse(acc), [token | rest]}
-        else
-          parse_nodes(rest, [{:text, token.value} | acc], context)
-        end
+        handle_text_token(token, rest, acc, context)
 
       :condition when token.value.kind == "if" ->
-        case parse_if_chain([token | rest]) do
-          {:error, _} = err ->
-            err
-
-          {if_node, rest} ->
-            parse_nodes(rest, [if_node | acc], context)
-        end
+        handle_if_token(token, rest, acc, context)
 
       :condition when token.value.kind == "elif" ->
         {Enum.reverse(acc), [token | rest]}
@@ -300,43 +295,16 @@ defmodule DotPrompt.Parser.Parser do
         {Enum.reverse(acc), [token | rest]}
 
       :block_start when token.value == "response" ->
-        case parse_response_block(rest, token.line) do
-          {:error, _} = err ->
-            err
-
-          {response_content, rest} ->
-            parse_nodes(rest, [{:response, response_content, token.line} | acc], context)
-        end
+        handle_response_token(token, rest, acc, context)
 
       :block_end ->
-        {token_var, context_var} =
-          case {token.value, context} do
-            {"@" <> tv, "@" <> cv} -> {tv, cv}
-            {"if", "@" <> cv} -> {nil, cv}
-            {"@" <> tv, _} -> {tv, nil}
-            {_, "@" <> cv} -> {nil, cv}
-            _ -> {nil, nil}
-          end
-
-        if context_var != nil and token_var != nil and token_var != context_var do
-          {Enum.reverse(acc), [token | rest]}
-        else
-          handle_block_end(token, rest, acc, context)
-        end
+        handle_block_end_token(token, rest, acc, context)
 
       :case_start ->
-        case parse_case_branches(rest, token.value) do
-          {:error, _} = err -> err
-          {branches, rest} -> parse_nodes(rest, [{:case, token.value, branches} | acc], context)
-        end
+        handle_case_token(token, rest, acc, context)
 
       :vary_start ->
-        var = token.value
-
-        case parse_case_branches(rest, var) do
-          {:error, _} = err -> err
-          {branches, rest} -> parse_nodes(rest, [{:vary, var, branches} | acc], context)
-        end
+        handle_vary_token(token, rest, acc, context)
 
       :fragment_static ->
         parse_nodes(rest, [{:fragment_static, token.value} | acc], context)
@@ -346,6 +314,70 @@ defmodule DotPrompt.Parser.Parser do
 
       _ ->
         parse_nodes(rest, [{:text, token_to_string(token)} | acc], context)
+    end
+  end
+
+  defp handle_text_token(token, rest, acc, context) do
+    trimmed = String.trim(token.value)
+    is_branch = trimmed != "" and Regex.match?(~r/^\w+:.*$/, trimmed)
+
+    if context == "BRANCH_CONTENT" and is_branch do
+      {Enum.reverse(acc), [token | rest]}
+    else
+      parse_nodes(rest, [{:text, token.value} | acc], context)
+    end
+  end
+
+  defp handle_if_token(token, rest, acc, context) do
+    case parse_if_chain([token | rest]) do
+      {:error, _} = err ->
+        err
+
+      {if_node, rest} ->
+        parse_nodes(rest, [if_node | acc], context)
+    end
+  end
+
+  defp handle_response_token(token, rest, acc, context) do
+    case parse_response_block(rest, token.line) do
+      {:error, _} = err ->
+        err
+
+      {response_content, rest} ->
+        parse_nodes(rest, [{:response, response_content, token.line} | acc], context)
+    end
+  end
+
+  defp handle_block_end_token(token, rest, acc, context) do
+    {token_var, context_var} =
+      case {token.value, context} do
+        {"@" <> tv, "@" <> cv} -> {tv, cv}
+        {"if", "@" <> cv} -> {nil, cv}
+        {"@" <> tv, _} -> {tv, nil}
+        {_, "@" <> cv} -> {nil, cv}
+        _ -> {nil, nil}
+      end
+
+    if context_var != nil and token_var != nil and token_var != context_var do
+      {Enum.reverse(acc), [token | rest]}
+    else
+      handle_block_end(token, rest, acc, context)
+    end
+  end
+
+  defp handle_case_token(token, rest, acc, context) do
+    case parse_case_branches(rest, token.value) do
+      {:error, _} = err -> err
+      {branches, rest} -> parse_nodes(rest, [{:case, token.value, branches} | acc], context)
+    end
+  end
+
+  defp handle_vary_token(token, rest, acc, context) do
+    var = token.value
+
+    case parse_case_branches(rest, var) do
+      {:error, _} = err -> err
+      {branches, rest} -> parse_nodes(rest, [{:vary, var, branches} | acc], context)
     end
   end
 

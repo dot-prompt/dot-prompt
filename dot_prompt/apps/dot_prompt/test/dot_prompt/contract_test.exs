@@ -1,6 +1,8 @@
 defmodule DotPrompt.ContractTest do
   use ExUnit.Case, async: false
 
+  alias DotPrompt.Parser.{Lexer, Parser}
+
   describe "response block collection and schema derivation" do
     test "parses response block in if branch" do
       content = """
@@ -64,8 +66,8 @@ defmodule DotPrompt.ContractTest do
       end response
       """
 
-      tokens = DotPrompt.Parser.Lexer.tokenize(content)
-      {:ok, ast} = DotPrompt.Parser.Parser.parse(tokens)
+      tokens = Lexer.tokenize(content)
+      {:ok, ast} = Parser.parse(tokens)
 
       blocks = ResponseCollector.collect_response_blocks(ast.body)
       assert length(blocks) == 1

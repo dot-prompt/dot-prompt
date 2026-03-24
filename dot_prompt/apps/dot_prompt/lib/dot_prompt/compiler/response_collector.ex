@@ -133,38 +133,42 @@ defmodule DotPrompt.Compiler.ResponseCollector do
     if type1 != type2 do
       false
     else
-      case type1 do
-        "object" ->
-          props1 = schema1["properties"] || schema1[:properties] || %{}
-          props2 = schema2["properties"] || schema2[:properties] || %{}
-
-          keys1 = Map.keys(props1) |> MapSet.new()
-          keys2 = Map.keys(props2) |> MapSet.new()
-
-          if keys1 == keys2 do
-            Enum.all?(Map.keys(props1), fn k ->
-              schemas_compatible?(props1[k], props2[k])
-            end)
-          else
-            false
-          end
-
-        "array" ->
-          items1 = schema1["items"] || schema1[:items] || %{}
-          items2 = schema2["items"] || schema2[:items] || %{}
-          schemas_compatible?(items1, items2)
-
-        nil ->
-          keys1 = Map.keys(schema1) |> MapSet.new()
-          keys2 = Map.keys(schema2) |> MapSet.new()
-
-          keys1 == keys2 &&
-            Enum.all?(Map.keys(schema1), fn k -> schemas_compatible?(schema1[k], schema2[k]) end)
-
-        _ ->
-          true
-      end
+      compare_schemas_by_type(type1, schema1, schema2)
     end
+  end
+
+  defp compare_schemas_by_type("object", schema1, schema2) do
+    props1 = schema1["properties"] || schema1[:properties] || %{}
+    props2 = schema2["properties"] || schema2[:properties] || %{}
+
+    keys1 = Map.keys(props1) |> MapSet.new()
+    keys2 = Map.keys(props2) |> MapSet.new()
+
+    if keys1 == keys2 do
+      Enum.all?(Map.keys(props1), fn k ->
+        schemas_compatible?(props1[k], props2[k])
+      end)
+    else
+      false
+    end
+  end
+
+  defp compare_schemas_by_type("array", schema1, schema2) do
+    items1 = schema1["items"] || schema1[:items] || %{}
+    items2 = schema2["items"] || schema2[:items] || %{}
+    schemas_compatible?(items1, items2)
+  end
+
+  defp compare_schemas_by_type(nil, schema1, schema2) do
+    keys1 = Map.keys(schema1) |> MapSet.new()
+    keys2 = Map.keys(schema2) |> MapSet.new()
+
+    keys1 == keys2 &&
+      Enum.all?(Map.keys(schema1), fn k -> schemas_compatible?(schema1[k], schema2[k]) end)
+  end
+
+  defp compare_schemas_by_type(_type, _schema1, _schema2) do
+    true
   end
 
   defp sort_schema_map(schema) do

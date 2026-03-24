@@ -4,11 +4,12 @@ defmodule Mix.Tasks.DotPrompt.Mcp do
   """
   use Mix.Task
 
+  alias DotPromptServer.MCP.Server
+
   @shortdoc "Runs the MCP server"
 
   def run(_args) do
-    # Application needs to be started
     Mix.Task.run("app.start")
-    DotPromptServer.MCP.Server.start()
+    Server.start()
   end
 end
