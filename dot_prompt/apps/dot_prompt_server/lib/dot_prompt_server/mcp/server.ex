@@ -28,13 +28,36 @@ defmodule DotPromptServer.MCP.Server do
     %{jsonrpc: "2.0", id: id, result: %{collections: DotPrompt.list_collections()}}
   end
 
-  def process_request(%{"method" => "prompt_schema", "params" => %{"name" => name}, "id" => id}) do
-    case DotPrompt.schema(name) do
+  def process_request(%{
+        "method" => "prompt_schema",
+        "params" => %{"name" => name} = params,
+        "id" => id
+      }) do
+    major =
+      case params["major"] do
+        nil ->
+          nil
+
+        val when is_binary(val) ->
+          case Integer.parse(val) do
+            {n, ""} -> n
+            _ -> nil
+          end
+
+        val when is_integer(val) ->
+          val
+      end
+
+    case DotPrompt.schema(name, major) do
       {:ok, schema} ->
         %{jsonrpc: "2.0", id: id, result: schema}
 
       {:error, details} ->
-        error_msg = if is_map(details) and Map.has_key?(details, :error), do: details.error, else: "unknown_error"
+        error_msg =
+          if is_map(details) and Map.has_key?(details, :error),
+            do: details.error,
+            else: "unknown_error"
+
         # For schema errors (non-existent prompt), we return the error in result rather than as json-rpc error
         # This matches MCP protocol for resource not found
         %{jsonrpc: "2.0", id: id, result: %{error: error_msg}}
@@ -43,15 +66,34 @@ defmodule DotPromptServer.MCP.Server do
 
   def process_request(%{
         "method" => "collection_schema",
-        "params" => %{"name" => name},
+        "params" => %{"name" => name} = params,
         "id" => id
       }) do
-    case DotPrompt.schema(name) do
+    major =
+      case params["major"] do
+        nil ->
+          nil
+
+        val when is_binary(val) ->
+          case Integer.parse(val) do
+            {n, ""} -> n
+            _ -> nil
+          end
+
+        val when is_integer(val) ->
+          val
+      end
+
+    case DotPrompt.schema(name, major) do
       {:ok, schema} ->
         %{jsonrpc: "2.0", id: id, result: schema}
 
       {:error, details} ->
-        error_msg = if is_map(details) and Map.has_key?(details, :error), do: details.error, else: "unknown_error"
+        error_msg =
+          if is_map(details) and Map.has_key?(details, :error),
+            do: details.error,
+            else: "unknown_error"
+
         %{jsonrpc: "2.0", id: id, result: %{error: error_msg}}
     end
   end
@@ -64,13 +106,18 @@ defmodule DotPromptServer.MCP.Server do
     opts =
       []
       |> maybe_put(:seed, params_map["seed"])
+      |> maybe_put(:major, params_map["major"])
 
     case DotPrompt.compile(name, params, opts) do
-      {:ok, template, vary_selections, _used, _files, _cache_hit, warnings} ->
+      {:ok, %DotPrompt.Result{} = result} ->
         %{
           jsonrpc: "2.0",
           id: id,
-          result: %{template: template, vary_selections: vary_selections, warnings: warnings}
+          result: %{
+            template: result.prompt,
+            vary_selections: result.vary_selections,
+            warnings: result.metadata.warnings
+          }
         }
 
       {:error, details} ->

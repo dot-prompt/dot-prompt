@@ -9,6 +9,7 @@ defmodule DotPrompt.Parser.EndIfTest do
       VIP
     end if
     """
+
     tokens = Lexer.tokenize(content)
     assert {:ok, ast} = Parser.parse(tokens)
     # The parser seems to split the content slightly differently than my manual assertion expected
@@ -25,9 +26,15 @@ defmodule DotPrompt.Parser.EndIfTest do
       C
     end if
     """
+
     tokens = Lexer.tokenize(content)
     assert {:ok, ast} = Parser.parse(tokens)
-    assert [{:if, "@a", "is true", [{:text, "  A"}], [{"is true", [{:text, "  B"}]}], [{:text, "  C"}]}, {:text, ""}] = ast.body
+
+    assert [
+             {:if, "@a", "is true", [{:text, "  A"}], [{"is true", [{:text, "  B"}]}],
+              [{:text, "  C"}]},
+             {:text, ""}
+           ] = ast.body
   end
 
   test "allows 'end @var' for 'if' blocks" do
@@ -36,6 +43,7 @@ defmodule DotPrompt.Parser.EndIfTest do
       VIP
     end @is_vip
     """
+
     tokens = Lexer.tokenize(content)
     assert {:ok, ast} = Parser.parse(tokens)
     assert [{:if, "@is_vip", "is true", [{:text, "  VIP"}], [], nil}, {:text, ""}] = ast.body
@@ -51,9 +59,15 @@ defmodule DotPrompt.Parser.EndIfTest do
       C
     end @a
     """
+
     tokens = Lexer.tokenize(content)
     assert {:ok, ast} = Parser.parse(tokens)
-    assert [{:if, "@a", "is true", [{:text, "  A"}], [{"is true", [{:text, "  B"}]}], [{:text, "  C"}]}, {:text, ""}] = ast.body
+
+    assert [
+             {:if, "@a", "is true", [{:text, "  A"}], [{"is true", [{:text, "  B"}]}],
+              [{:text, "  C"}]},
+             {:text, ""}
+           ] = ast.body
   end
 
   test "still fails on mismatched '@var'" do
@@ -62,6 +76,7 @@ defmodule DotPrompt.Parser.EndIfTest do
       inside
     end @b
     """
+
     tokens = Lexer.tokenize(content)
     assert {:error, message} = Parser.parse(tokens)
     assert message =~ "mismatched_end"

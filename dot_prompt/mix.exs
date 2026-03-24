@@ -7,7 +7,15 @@ defmodule DotPromptUmbrella.MixProject do
       version: "0.1.0",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
-      listeners: [Phoenix.CodeReloader]
+      listeners: [Phoenix.CodeReloader],
+      releases: [
+        dot_prompt_umbrella: [
+          applications: [
+            dot_prompt: :permanent,
+            dot_prompt_server: :permanent
+          ]
+        ]
+      ]
     ]
   end
 

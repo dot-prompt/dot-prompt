@@ -5,6 +5,13 @@ defmodule DotPrompt.Compiler.VaryCompositor do
 
   @vary_regex ~r/\[\[vary:"([^"]+)"\]\]/
 
+  # Pre-register atoms used for param lookups to avoid "not an existing atom" errors
+  # These atoms are used when looking up params with atom keys
+  @preloaded_atoms [:intro, :intro_style, :style]
+
+  # Ensure atoms are loaded at compile time by referencing them
+  defp ensure_atoms_loaded, do: @preloaded_atoms
+
   @doc """
   Resolves vary slots and returns the final string.
   """
@@ -17,6 +24,8 @@ defmodule DotPrompt.Compiler.VaryCompositor do
   Resolves vary slots and returns both the string and the selections made.
   """
   def resolve_full(skeleton, vary_map, seed \\ nil, params \\ %{}) do
+    # Ensure preloaded atoms are registered
+    ensure_atoms_loaded()
     selections = pre_calculate_selections(vary_map, seed, params)
 
     # Single-pass resolution using Regex.replace with a function
@@ -43,9 +52,11 @@ defmodule DotPrompt.Compiler.VaryCompositor do
         cond do
           # Param match
           # Try multiple key formats for maximum compatibility (@name string, name string, name atom)
-          (val = Map.get(params, name) || 
-                 Map.get(params, String.trim_leading(to_string(name), "@")) ||
-                 Map.get(params, String.to_existing_atom(String.trim_leading(to_string(name), "@")))) != nil ->
+          (val =
+             Map.get(params, name) ||
+               Map.get(params, String.trim_leading(to_string(name), "@")) ||
+               Map.get(params, String.to_existing_atom(String.trim_leading(to_string(name), "@")))) !=
+              nil ->
             target = to_string(val)
             match = Enum.find(branches, fn {id, _, _} -> to_string(id) == target end)
             if match, do: match_to_selection(match), else: select_branch(branches, seed)

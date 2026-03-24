@@ -18,7 +18,7 @@ defmodule DotPrompt.InitBlockIntegrationTest do
       """
 
       params = %{user_name: "Alice"}
-      assert {:ok, result, _, _, _, _, _} = DotPrompt.compile(content, params)
+      assert {:ok, %{prompt: result}} = DotPrompt.compile(content, params)
       assert result =~ "Hello Alice"
       assert result =~ "welcome!"
     end
@@ -33,7 +33,7 @@ defmodule DotPrompt.InitBlockIntegrationTest do
       """
 
       params = %{score: 42}
-      assert {:ok, result, _, _, _, _, _} = DotPrompt.compile(content, params)
+      assert {:ok, %{prompt: result}} = DotPrompt.compile(content, params)
       assert result =~ "Your score is 42"
     end
 
@@ -51,12 +51,12 @@ defmodule DotPrompt.InitBlockIntegrationTest do
       """
 
       params = %{is_premium: true}
-      assert {:ok, result, _, _, _, _, _} = DotPrompt.compile(content, params)
+      assert {:ok, %{prompt: result}} = DotPrompt.compile(content, params)
       assert result =~ "premium access"
       refute result =~ "basic access"
 
       params = %{is_premium: false}
-      assert {:ok, result, _, _, _, _, _} = DotPrompt.compile(content, params)
+      assert {:ok, %{prompt: result}} = DotPrompt.compile(content, params)
       assert result =~ "basic access"
       refute result =~ "premium access"
     end
@@ -76,7 +76,7 @@ defmodule DotPrompt.InitBlockIntegrationTest do
 
       # The vary block should compile - params from init are used to validate
       # Seed ensures deterministic selection
-      assert {:ok, result, _, _, _, _, _} = DotPrompt.compile(content, %{}, seed: 1)
+      assert {:ok, %{prompt: result}} = DotPrompt.compile(content, %{}, seed: 1)
       assert is_binary(result)
     end
 
@@ -90,7 +90,7 @@ defmodule DotPrompt.InitBlockIntegrationTest do
       """
 
       # No params provided - should use default
-      assert {:ok, result, _, _, _, _, _} = DotPrompt.compile(content, %{})
+      assert {:ok, %{prompt: result}} = DotPrompt.compile(content, %{})
       assert result =~ "Hello"
     end
   end
@@ -106,7 +106,7 @@ defmodule DotPrompt.InitBlockIntegrationTest do
       Test content here.
       """
 
-      assert {:ok, result, _, _, _, _, _} = DotPrompt.compile(content, %{})
+      assert {:ok, %{prompt: result}} = DotPrompt.compile(content, %{})
       assert result =~ "Test content"
     end
   end
@@ -123,7 +123,7 @@ defmodule DotPrompt.InitBlockIntegrationTest do
       """
 
       params = %{temperature: 0.7, max_tokens: 1000}
-      assert {:ok, result, _, _, _, _, _} = DotPrompt.compile(content, params)
+      assert {:ok, %{prompt: result}} = DotPrompt.compile(content, params)
       assert result =~ "temperature 0.7"
       assert result =~ "max 1000 tokens"
     end
@@ -142,11 +142,11 @@ defmodule DotPrompt.InitBlockIntegrationTest do
       """
 
       params = %{tone: "encouraging"}
-      assert {:ok, result, _, _, _, _, _} = DotPrompt.compile(content, params)
+      assert {:ok, %{prompt: result}} = DotPrompt.compile(content, params)
       assert result =~ "Be encouraging"
 
       params = %{tone: "critical"}
-      assert {:ok, result, _, _, _, _, _} = DotPrompt.compile(content, params)
+      assert {:ok, %{prompt: result}} = DotPrompt.compile(content, params)
       assert result =~ "Be critical"
     end
 
@@ -160,7 +160,7 @@ defmodule DotPrompt.InitBlockIntegrationTest do
       """
 
       params = %{level: 5}
-      assert {:ok, result, _, _, _, _, _} = DotPrompt.compile(content, params)
+      assert {:ok, %{prompt: result}} = DotPrompt.compile(content, params)
       assert result =~ "level 5"
     end
   end
@@ -177,7 +177,7 @@ defmodule DotPrompt.InitBlockIntegrationTest do
       Actual prompt content here.
       """
 
-      assert {:ok, result, _, _, _, _, _} = DotPrompt.compile(content, %{})
+      assert {:ok, %{prompt: result}} = DotPrompt.compile(content, %{})
       assert result =~ "Actual prompt content"
       refute result =~ "documentation"
       refute result =~ "context about usage"
@@ -197,8 +197,8 @@ defmodule DotPrompt.InitBlockIntegrationTest do
       compile_params = %{system_prompt: "You are a helpful assistant."}
       runtime = %{}
 
-      # render returns {:ok, result, vary_selections, injected_tokens, cache_hit}
-      assert {:ok, result, _, _, _} = DotPrompt.render(content, compile_params, runtime)
+      # render returns {:ok, result}
+      assert {:ok, %{prompt: result}} = DotPrompt.render(content, compile_params, runtime)
       assert result =~ "You are a helpful assistant"
     end
 
@@ -214,7 +214,7 @@ defmodule DotPrompt.InitBlockIntegrationTest do
       compile_params = %{greeting: "Hello"}
       runtime = %{}
 
-      assert {:ok, result, _, _, _} = DotPrompt.render(content, compile_params, runtime)
+      assert {:ok, %{prompt: result}} = DotPrompt.render(content, compile_params, runtime)
       assert result =~ "Hello"
       assert result =~ "world"
     end
@@ -257,7 +257,7 @@ defmodule DotPrompt.InitBlockIntegrationTest do
         role: "admin"
       }
 
-      assert {:ok, result, _, _, _, _, _} = DotPrompt.compile(content, params)
+      assert {:ok, %{prompt: result}} = DotPrompt.compile(content, params)
       assert result =~ "User: John"
       assert result =~ "Age: 30"
       assert result =~ "Active: true"
@@ -281,7 +281,7 @@ defmodule DotPrompt.InitBlockIntegrationTest do
       """
 
       # Test that the full init block compiles - seed ensures deterministic vary selection
-      assert {:ok, result, _, _, _, _, _} = DotPrompt.compile(content, %{}, seed: 1)
+      assert {:ok, %{prompt: result}} = DotPrompt.compile(content, %{}, seed: 1)
       assert is_binary(result)
     end
   end

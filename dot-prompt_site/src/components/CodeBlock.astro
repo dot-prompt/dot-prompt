@@ -1,0 +1,82 @@
+---
+import { codeToHtml } from 'shiki';
+
+interface Props {
+  code: string;
+  language?: string;
+  title?: string;
+  showLineNumbers?: boolean;
+}
+
+const { code, language = 'elixir', title, showLineNumbers = false } = Astro.props;
+
+const html = await codeToHtml(code, {
+  lang: language,
+  themes: {
+    light: 'github-light',
+    dark: 'github-dark',
+  },
+  defaultColor: 'light',
+});
+---
+
+<div class="group relative my-4">
+  {title && (
+    <div class="rounded-t-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-sm font-mono text-[var(--color-text-muted)]">
+      {title}
+    </div>
+  )}
+  <div class="relative">
+    <div class:list={[
+      'overflow-x-auto rounded-lg border border-[var(--color-border)] [&>pre]:p-4 [&>pre]:m-0 [&>pre]:overflow-x-auto [&>pre]:text-sm [&>pre]:font-mono',
+      title ? '[&>div]:rounded-t-none [&>div]:border-t-0' : '[&>div]:rounded-lg'
+    ]}>
+      <div set:html={html} />
+    </div>
+    <button
+      class="copy-button absolute right-2 top-2 rounded bg-[var(--color-surface)] px-2 py-1 text-xs text-[var(--color-text-muted)] opacity-0 transition-opacity hover:bg-[var(--color-border)] group-hover:opacity-100"
+      aria-label="Copy code"
+    >
+      Copy
+    </button>
+  </div>
+</div>
+
+<script>
+  document.querySelectorAll('.copy-button').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const codeBlock = button.closest('.group')?.querySelector('pre code');
+      if (codeBlock) {
+        await navigator.clipboard.writeText(codeBlock.textContent || '');
+        button.textContent = 'Copied!';
+        setTimeout(() => {
+          button.textContent = 'Copy';
+        }, 2000);
+      }
+    });
+  });
+</script>
+
+<style is:global>
+  .astro-code,
+  .astro-code > pre,
+  .astro-code > pre > code {
+    background-color: #f8fafc !important;
+  }
+  :root.dark .astro-code,
+  :root.dark .astro-code > pre,
+  :root.dark .astro-code > pre > code {
+    background-color: #1e293b !important;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not(.light) .astro-code,
+    :root:not(.light) .astro-code > pre,
+    :root:not(.light) .astro-code > pre > code {
+      background-color: #1e293b !important;
+    }
+  }
+  /* Allow Shiki to set colors but ensure pre doesn't lose indentation */
+  .astro-code {
+    white-space: pre !important;
+  }
+</style>

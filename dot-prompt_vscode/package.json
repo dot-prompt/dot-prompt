@@ -1,0 +1,79 @@
+{
+  "name": "dot-prompt",
+  "displayName": "dot-prompt",
+  "description": "VS Code extension for .prompt files with server-backed compilation and compiled view webview",
+  "version": "0.1.0",
+  "publisher": "dot-prompt",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Other",
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onLanguage:prompt",
+    "onCommand:dot-prompt.compile",
+    "onCommand:dot-prompt.openCompiledView"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "prompt",
+        "aliases": [
+          "Prompt",
+          "prompt"
+        ],
+        "extensions": [
+          ".prompt"
+        ]
+      }
+    ],
+    "commands": [
+      {
+        "command": "dot-prompt.compile",
+        "title": "dot-prompt: Compile"
+      },
+      {
+        "command": "dot-prompt.openCompiledView",
+        "title": "dot-prompt: Open Compiled View"
+      }
+    ],
+    "configuration": {
+      "title": "dot-prompt",
+      "properties": {
+        "dotPrompt.serverUrl": {
+          "type": "string",
+          "default": "http://localhost:4040",
+          "description": "URL of the dot-prompt Phoenix server"
+        },
+        "dotPrompt.autoCompile": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically compile .prompt files on save"
+        },
+        "dotPrompt.compileDelay": {
+          "type": "number",
+          "default": 300,
+          "description": "Delay in milliseconds before auto-compile"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/node": "^18.19.0",
+    "@types/vscode": "^1.75.0",
+    "@vscode/test-electron": "^2.3.8",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "vscode": "^1.1.37"
+  }
+}

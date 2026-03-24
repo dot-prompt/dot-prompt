@@ -1,5 +1,5 @@
 # dot-prompt Specification
-**Version 1.1 — Language Update**
+**Version 1.2 — Response Contracts + Versioning**
 
 A compiled domain-specific language for authoring structured LLM prompts.
 dot-prompt compiles to a clean, flat prompt string. The LLM receives only
@@ -23,28 +23,71 @@ Applied to the already implemented v1.0 codebase:
 7. `vary` accepts single optional `seed:` — `seeds:` plural removed entirely
 8. One seed drives all vary blocks — hashed against vary variable name internally
 9. Default values on params using `=` — `@answer_depth: enum[shallow, medium, deep] = medium`
-28. `matchRe: pattern` — compile-time regex, supports `@variable` interpolation (enum variables only)
 10. Multiline `->` documentation using indented continuation
 11. `@version` promoted to top level of `init` block — out of `def:`
 12. No `@system` / `@user` blocks — caller decides how to split the string
-14. No `@const` — model config is outside dot-prompt boundary
-15. No reserved variable names — author names everything
-16. No `@note` — covered by `#` and `docs`
-17. No `when` — keep `if` and `case`
-18. No `@include` — fragments cover all composition needs
-19. No `seeds:` plural in API — only `seed:` singular
-20. No `skills:` block in `_index.prompt` — folder structure is the registry
-21. No select rules in `_index.prompt` — assembly rules live in calling prompt
-22. No `order: random` in fragments — random selection belongs in `vary`
-23. No dynamic regex matching — callers preprocess before calling dot-prompt
-24. No trailing `/` on folder paths — compiler resolves file vs folder automatically
-25. `list[...]` and `enum[...]` — members declared inline, no `list[str]` or `list[enum]`
-26. `enum` single value → one fragment, `list` multiple values → composited fragments
-27. `match: @variable` — exact match against fragment `def.match` field
-28. `matchRe: pattern` — compile-time regex, supports `@variable` interpolation (enum variables only)
-29. `match: all` — returns every fragment in folder
-30. `limit: n`, `order: ascending / descending` — assembly rules in calling prompt only
-31. `_index.prompt` declares folder metadata and params only — no assembly rules
+13. No `@const` — model config is outside dot-prompt boundary
+14. No reserved variable names — author names everything
+15. No `@note` — covered by `#` and `docs`
+16. No `when` — keep `if` and `case`
+17. No `@include` — fragments cover all composition needs
+18. No `seeds:` plural in API — only `seed:` singular
+19. No `skills:` block in `_index.prompt` — folder structure is the registry
+20. No select rules in `_index.prompt` — assembly rules live in calling prompt
+21. No `order: random` in fragments — random selection belongs in `vary`
+22. No dynamic regex matching — callers preprocess before calling dot-prompt
+23. No trailing `/` on folder paths — compiler resolves file vs folder automatically
+24. `list[...]` and `enum[...]` — members declared inline, no `list[str]` or `list[enum]`
+25. `enum` single value → one fragment, `list` multiple values → composited fragments
+26. `match: @variable` — exact match against fragment `def.match` field
+27. `matchRe: pattern` — compile-time regex, supports `@variable` interpolation (enum variables only)
+28. `match: all` — returns every fragment in folder
+29. `limit: n`, `order: ascending / descending` — assembly rules in calling prompt only
+30. `_index.prompt` declares folder metadata and params only — no assembly rules
+
+---
+
+## What Changed in v1.2
+
+New features added on top of v1.1:
+
+1. `response do / end response` block in prompt body — not in init
+2. Response block contains raw JSON shape — compiler derives contract schema
+3. `{response_contract}` reference — injects response JSON into compiled prompt as LLM instruction
+4. Multiple `response` blocks allowed — one per branch
+5. Compiler collects all response blocks and compares shapes across branches — compatible → warning, incompatible → error
+6. `DotPrompt.Result` struct returned instead of plain string from all compile/render calls
+7. `result.prompt` — compiled prompt string, `result.response_contract` — derived schema
+8. `DotPrompt.validate_output/3` — validates LLM JSON response against contract
+9. HTTP API returns both `prompt` and `response_contract` in all responses
+10. `@major` field added to `init` — contract major version, callers pin to this
+11. `@version` becomes `major.minor` — managed automatically by container on commit
+12. Developer never manually edits `@version` or `@major` after initial declaration
+13. Breaking change without major version increment → hard warning at commit
+14. Non-breaking change → minor auto-bumped on commit silently
+15. Server serves multiple major versions simultaneously
+16. API caller pins to major — served latest minor automatically
+17. `GET /api/schema/:prompt/:major` — schema for specific major version
+18. Current version always at top level — no version suffix in filename
+19. Old major versions in local `archive/` as `name_v{major}.prompt`
+20. `archive/` folders are never collections — no `_index.prompt` inside
+21. Container detects breaking change on every file save
+22. Viewer prompts developer — `Version it` / `Not now` / `Ignore always`
+23. `Ignore always` — suppressed until git commit, then hard warning
+24. Non-breaking changes — silent, minor auto-bumped on commit
+25. Post-commit hook — one line in `.git/hooks/post-commit`, pings container
+26. Container mounts full app repo — runs git commands against it
+27. `POST /api/version` — version it action from VS Code or viewer
+28. `POST /webhooks/commit` — triggered by post-commit hook
+29. Container exposes SSE stream at `GET /api/events`
+30. VS Code extension subscribes to SSE on startup
+31. Breaking change fires native VS Code notification — `Version it` / `Not now`
+32. Inline diagnostic squiggle on changed params or response block
+33. Container snapshots file to `.snapshots/` on first save after last commit
+34. Subsequent saves do not update snapshot — only first save matters
+35. On `Version it` — snapshot moved to `archive/` as old major version
+36. On git commit — snapshot cleared, committed version is new baseline
+37. `.snapshots/` gitignored — never committed, never deployed
 
 ---
 
@@ -57,9 +100,9 @@ The caller decides what to do with it.
 
 | Layer | Responsibility |
 |-------|---------------|
-| dot-prompt | Shape one prompt deterministically, return a string |
+| dot-prompt | Shape one prompt + response contract deterministically, return `DotPrompt.Result` |
 | State machine | Orchestrate multiple prompt calls and conversation flow |
-| Caller | Make the LLM call, handle the response |
+| Caller | Make the LLM call, validate response with `DotPrompt.validate_output/3` |
 
 ---
 
@@ -276,17 +319,32 @@ init do
 end init
 ```
 
-### @version
+### @version and @major
 
-Top level field in `init`. Used in cache keys and telemetry.
-Increment when the prompt changes to invalidate cached compiled templates.
+`@major` is the **contract version**. Callers pin their integration to a major version.
+The container manages `@version` as `major.minor` — developer sets both only on initial
+declaration. Never manually edited after that.
 
 ```
 init do
-  @version: 3
+  @major: 1
+  @version: 1.0
   ...
 end init
 ```
+
+| Field | Managed by | Meaning |
+|-------|------------|--------|
+| `@major` | Developer (initial) / container (versioning) | Breaking change boundary — callers pin here |
+| `@version` | Container (auto) | `major.minor` — minor auto-bumped on non-breaking commit |
+
+**Rules:**
+- `@major: 0` is invalid — must be ≥ 1
+- After initial declaration, developer never touches either field
+- Container bumps minor on non-breaking commit
+- Container increments major on `Version it` action (breaking change declared)
+- Breaking change without major bump → hard warning at commit
+- `@version` in cache keys and telemetry — minor bump invalidates structural cache
 
 ### def:
 
@@ -357,12 +415,57 @@ end docs
 
 ---
 
+## Prompt Folder Structure
+
+### Current version — top level
+
+The current (latest) version of a prompt lives at the top level with no suffix.
+
+```
+priv/prompts/
+  concept_explanation.prompt     # latest major
+  skills/
+    _index.prompt
+    milton_model.prompt
+    ...
+  archive/
+    concept_explanation_v1.prompt  # archived major 1
+    concept_explanation_v2.prompt  # archived major 2
+    skills/
+      archive/
+        milton_model_v1.prompt
+```
+
+**Rules:**
+- Current version: `name.prompt` at top level — no suffix, no version folder
+- Archived majors: `archive/name_v{major}.prompt`
+- Collections with archives: `collection_name/archive/fragment_v{major}.prompt`
+- `archive/` folders **never** contain `_index.prompt` — they are not collections
+- `.snapshots/` lives alongside `archive/` — gitignored, never committed
+
+```
+priv/prompts/
+  concept_explanation.prompt          # current (e.g. major 3)
+  .snapshots/
+    concept_explanation.prompt.snap   # pre-edit snapshot, cleared on commit
+  archive/
+    concept_explanation_v1.prompt
+    concept_explanation_v2.prompt
+  skills/
+    _index.prompt
+    milton_model.prompt
+    archive/
+      milton_model_v1.prompt
+```
+
+---
+
 ## Fragment Collections
 
 Any folder with an `_index.prompt` is a collection.
 The `_index.prompt` declares the folder metadata and params.
 Assembly rules are declared in the calling prompt — not in `_index.prompt`.
- 
+
 | Rule | Syntax | Requirement |
 |------|--------|-------------|
 | Exact match | `match: @variable` | `enum` or `list` |
@@ -704,6 +807,92 @@ Prod:  Stage 1 → check structural cache
 
 ---
 
+## Response Contracts
+
+A `response do / end response` block in the **prompt body** (not in `init`) declares the
+expected JSON shape of the LLM's response. The compiler derives a strongly-typed contract
+from it and returns it alongside the compiled prompt.
+
+### Syntax
+
+```
+case @mode do
+teaching: Teach the concept.
+response do
+  {
+    "response_type": "teaching",
+    "content": "string",
+    "confidence": "number"
+  }
+end response
+
+question: Answer the question.
+response do
+  {
+    "response_type": "question",
+    "answer": "string"
+  }
+end response
+end @mode
+```
+
+### {response_contract}
+
+A special fragment reference that injects the derived response contract into the compiled
+prompt as a structured JSON instruction to the LLM:
+
+```
+Provide your response in exactly this JSON format:
+{response_contract}
+```
+
+This is replaced by the compiler with the contract JSON. The LLM sees the actual JSON shape.
+
+### Multiple response blocks — validation rules
+
+Compiler collects all `response` blocks across all branches and compares their shapes:
+
+| Scenario | Compiler action |
+|----------|-----------------|
+| All blocks identical | Silent — no warning |
+| Same fields, different values | Warning: `compatible_contracts` — field names match, values differ |
+| Different fields or types | Error: `incompatible_contracts` — compilation fails |
+| One block missing in a branch | Warning: `missing_contract` — branch has no response shape |
+
+### DotPrompt.Result
+
+All compile and render calls return a `DotPrompt.Result` struct instead of a plain string:
+
+```elixir
+%DotPrompt.Result{
+  prompt: "You are teaching intermediate students...",
+  response_contract: %{
+    "response_type" => %{type: "string", required: true},
+    "content" => %{type: "string", required: true},
+    "confidence" => %{type: "number", required: false}
+  },
+  vary_selections: %{"intro_style" => "curious"},
+  compiled_tokens: 312,
+  cache_hit: true
+}
+```
+
+### DotPrompt.validate_output/3
+
+Validates an LLM JSON response string against a response contract:
+
+```elixir
+case DotPrompt.validate_output(llm_response, result.response_contract) do
+  :ok -> # valid
+  {:error, reason} -> # invalid — reason describes the mismatch
+end
+
+# Strict mode — extra fields are rejected
+DotPrompt.validate_output(llm_response, contract, strict: true)
+```
+
+---
+
 ## Error Handling
 
 Compiler stops immediately on any error. Never silent.
@@ -724,6 +913,184 @@ Every error includes file name, line number, variable name, and message.
 | `missing_fragment` | `shared/rules.prompt not found` |
 | `missing_index` | `skills folder has no _index.prompt` |
 | `collection_no_match` | `no fragments matched Milton Modelx in skills` |
+| `incompatible_contracts` | `response blocks have incompatible schemas — teaching branch missing "answer" field` |
+| `compatible_contracts` | (warning) `response blocks have same fields but different value types across branches` |
+
+---
+
+## Versioning Workflow
+
+The container manages major/minor versioning automatically. The developer only declares
+`@major` and `@version` on initial file creation. After that, the container owns them.
+
+### File save — breaking change detection
+
+```
+Developer saves file
+      │
+      ▼
+Container compares saved file to .snapshots/ baseline
+      │
+      ├── No change detected → silent
+      ├── Non-breaking change → silent (minor bumped at commit)
+      └── Breaking change detected
+            │
+            ├── VS Code notification: "Breaking change in concept_explanation"
+            │     [ Version it ]  [ Not now ]  [ Ignore always ]
+            │
+            └── Viewer prompt: same three options
+```
+
+### On "Version it"
+
+1. Snapshot moved to `archive/concept_explanation_v{current_major}.prompt`
+2. `@major` incremented in the working file
+3. `@version` reset to `{new_major}.0`
+4. New snapshot taken of the versioned file
+
+### On "Ignore always"
+
+- Breaking change suppressed in viewer and VS Code until next git commit
+- On commit — hard warning fires regardless
+
+### On git commit — post-commit hook
+
+```bash
+# .git/hooks/post-commit (single line)
+curl -s -X POST http://localhost:4041/webhooks/commit > /dev/null
+```
+
+```
+Commit fires POST /webhooks/commit
+      │
+      ▼
+Container runs git diff HEAD~1 HEAD against repo
+      │
+      ├── Breaking change unversioned → hard error logged, developer notified
+      ├── Non-breaking change → @version minor auto-bumped, .snapshot/ cleared
+      └── No prompt change → snapshot cleared, new baseline set
+```
+
+### Endpoints
+
+| Endpoint | Purpose |
+|----------|---------|
+| `POST /api/version` | Trigger "Version it" — archives current, bumps major |
+| `POST /webhooks/commit` | Triggered by post-commit hook — runs diff, bumps minor |
+| `GET /api/events` | SSE stream — breaking change events, version notifications |
+
+---
+
+## Breaking Change Definitions
+
+### Input changes — breaking
+
+| Change | Example |
+|--------|---------|
+| Removing a param | `@skill_names` deleted |
+| Changing param type | `str` → `enum[...]` |
+| Renaming a param | `@level` → `@user_level` |
+| Removing a default from required param | `= medium` removed |
+| Narrowing an enum — removing valid values | `enum[a, b, c]` → `enum[a, b]` |
+
+### Input changes — non-breaking
+
+| Change | Example |
+|--------|---------|
+| Adding a param with a default | `@theme: enum[light, dark] = light` |
+| Adding new enum values | `enum[a, b]` → `enum[a, b, c]` |
+| Changing documentation | `->`  doc text updated |
+| Changing defaults | `= medium` → `= deep` |
+| Prompt body changes with no contract change | Prose rewrite |
+
+### Output changes — breaking
+
+| Change | Example |
+|--------|---------|
+| Removing a response field | `"content"` deleted from response block |
+| Renaming a response field | `"content"` → `"body"` |
+| Changing a response field type | `"count": "number"` → `"count": "string"` |
+| Adding a required response field | New field with `required: true` |
+
+### Output changes — non-breaking
+
+| Change | Example |
+|--------|---------|
+| Adding optional fields | New field with `required: false` |
+| Changing prose or step instructions | Prompt body text update |
+
+---
+
+## VS Code Integration
+
+The container exposes an SSE stream. The VS Code extension subscribes on startup
+and surfaces breaking change notifications without leaving the editor.
+
+### SSE stream — GET /api/events
+
+```
+Event types:
+  breaking_change  — file has an unversioned breaking change
+  version_bumped   — major or minor version updated
+  compile_error    — syntax or validation error on save
+  commit_warning   — unversioned breaking change present at commit
+```
+
+```javascript
+// VS Code extension
+const evtSource = new EventSource("http://localhost:4041/api/events");
+evtSource.addEventListener("breaking_change", (e) => {
+  const { file, change_summary } = JSON.parse(e.data);
+  vscode.window.showWarningMessage(
+    `Breaking change in ${file}: ${change_summary}`,
+    "Version it", "Not now"
+  ).then(choice => {
+    if (choice === "Version it") fetch("http://localhost:4041/api/version", ...);
+  });
+});
+```
+
+### Inline diagnostics
+
+The extension registers a diagnostic provider. When the SSE stream emits a
+`breaking_change` event, the extension places a squiggle on:
+- The changed param declaration line
+- The changed `response do` block
+
+This gives the developer precise line-level feedback without leaving the file.
+
+---
+
+## Snapshots
+
+Snapshots are pre-edit baselines used to detect what changed since the last commit.
+
+### Lifecycle
+
+```
+First save after commit
+      │
+      └── Container writes .snapshots/name.prompt.snap
+
+Subsequent saves (same commit cycle)
+      │
+      └── Snapshot unchanged — diff always against first-save baseline
+
+On "Version it"
+      │
+      └── Snapshot moved to archive/name_v{major}.prompt
+          New snapshot taken of versioned file
+
+On git commit
+      │
+      └── Snapshot cleared — committed file is new baseline
+```
+
+**Rules:**
+- `.snapshots/` is gitignored — never committed, never deployed
+- Snapshot triggered by file change event — not a timer
+- Only one snapshot per file per commit cycle — first save wins
+- Snapshot cleared on commit even if no version action was taken
 
 ---
 
@@ -755,6 +1122,10 @@ Container exposes REST API on port 4041.
   "vary_selections": {
     "intro_style": "curious",
     "closing_style": "exercise"
+  },
+  "response_contract": {
+    "response_type": {"type": "string", "required": true},
+    "content": {"type": "string", "required": true}
   }
 }
 ```
@@ -806,16 +1177,23 @@ Container exposes REST API on port 4041.
   "injected_tokens": 387,
   "vary_selections": {
     "intro_style": "curious"
+  },
+  "response_contract": {
+    "response_type": {"type": "string", "required": true},
+    "content": {"type": "string", "required": true}
   }
 }
 ```
 
 ### GET /api/schema/:prompt
 
+Returns schema for the latest major version.
+
 ```json
 {
   "name": "concept_explanation",
-  "version": 1,
+  "major": 3,
+  "version": "3.2",
   "description": "Teacher mode — explanation phase with dynamic depth control.",
   "params": {
     "skill_names": {
@@ -831,26 +1209,6 @@ Container exposes REST API on port 4041.
       "lifecycle": "compile",
       "default": 1,
       "doc": "current step in the teaching sequence"
-    },
-    "variation": {
-      "type": "enum",
-      "members": ["analogy", "recognition", "story"],
-      "lifecycle": "compile",
-      "default": null,
-      "doc": "teaching track"
-    },
-    "answer_depth": {
-      "type": "enum",
-      "members": ["shallow", "medium", "deep"],
-      "lifecycle": "compile",
-      "default": "medium",
-      "doc": "depth of question answers"
-    },
-    "if_input_mode_question": {
-      "type": "bool",
-      "lifecycle": "compile",
-      "default": false,
-      "doc": "true when user has asked a question"
     },
     "user_input": {
       "type": "str",
@@ -878,17 +1236,69 @@ Container exposes REST API on port 4041.
       "doc": "recent conversation history for context"
     }
   },
+  "response_contract": {
+    "response_type": {"type": "string", "required": true},
+    "content": {"type": "string", "required": true}
+  },
   "docs": "Teaches NLP skills using a structured multi-turn pattern..."
 }
 ```
 
+### GET /api/schema/:prompt/:major
+
+Returns schema for a **specific major version** — reads from `archive/name_v{major}.prompt`.
+Callers pin to a major version and receive the latest minor automatically.
+
+```http
+GET /api/schema/concept_explanation/1
+GET /api/schema/concept_explanation/2
+```
+
+Returns 404 if the major version does not exist in `archive/` and is not the current major.
+
 ### GET /api/prompts
 
-Lists all available `.prompt` files with name, version, description.
+Lists all available `.prompt` files with name, major, version, description.
 
 ### GET /api/collections
 
 Lists all folders with `_index.prompt` with name, version, description.
+
+### POST /api/version
+
+Triggers the "Version it" action for a specific prompt file:
+
+```json
+// Request
+{ "prompt": "concept_explanation" }
+
+// Response
+{
+  "archived_as": "concept_explanation_v2.prompt",
+  "new_major": 3,
+  "new_version": "3.0"
+}
+```
+
+### POST /webhooks/commit
+
+Triggered by the post-commit git hook. Container runs diff against the repo,
+bumps minor versions for non-breaking changes, fires hard warning for unversioned
+breaking changes.
+
+```json
+// Response
+{
+  "bumped": ["concept_explanation", "skills/_index"],
+  "warnings": [],
+  "errors": []
+}
+```
+
+### GET /api/events
+
+Server-Sent Events stream. Emits `breaking_change`, `version_bumped`,
+`compile_error`, and `commit_warning` events as they occur.
 
 ---
 
@@ -922,12 +1332,15 @@ Library emits events. Host application attaches handlers and stores.
 ## Elixir Native API
 
 ```elixir
-# Schema
+# Schema — latest major
 DotPrompt.schema("concept_explanation")
 DotPrompt.schema("skills")
 
-# Compile
-template = DotPrompt.compile("concept_explanation", %{
+# Schema — specific major version
+DotPrompt.schema("concept_explanation", major: 2)
+
+# Compile — returns DotPrompt.Result
+%DotPrompt.Result{} = result = DotPrompt.compile("concept_explanation", %{
   pattern_step: 2,
   variation: :recognition,
   answer_depth: :medium,
@@ -935,14 +1348,23 @@ template = DotPrompt.compile("concept_explanation", %{
   skill_names: ["Milton Model", "Meta Model"]
 }, seed: 42)
 
-# Inject
-prompt = DotPrompt.inject(template, %{
+result.prompt             # compiled template string
+result.response_contract  # derived schema from response blocks
+result.vary_selections    # %{"intro_style" => "curious"}
+result.compiled_tokens    # 312
+result.cache_hit          # true | false
+
+# Inject — accepts DotPrompt.Result or plain string template
+final = DotPrompt.inject(result, %{
   user_input: "Can you give me an example?",
   user_level: "intermediate"
 })
 
-# Render — compile and inject in one call
-prompt = DotPrompt.render("concept_explanation",
+final.prompt           # fully rendered string
+final.injected_tokens  # 387
+
+# Render — compile and inject in one call, returns DotPrompt.Result
+result = DotPrompt.render("concept_explanation",
   %{
     pattern_step: 2,
     variation: :recognition,
@@ -956,6 +1378,17 @@ prompt = DotPrompt.render("concept_explanation",
   },
   seed: 42
 )
+
+# Validate LLM response against the contract
+llm_response = "{\"response_type\": \"teaching\", \"content\": \"...\"}"}
+
+case DotPrompt.validate_output(llm_response, result.response_contract) do
+  :ok -> # valid
+  {:error, reason} -> # invalid
+end
+
+# Strict mode — extra fields rejected
+DotPrompt.validate_output(llm_response, result.response_contract, strict: true)
 ```
 
 ---
@@ -1237,7 +1670,21 @@ Structural keywords never use `@`.
 9. Fragment paths — no trailing `/` — compiler checks if path is file or directory
 10. `@version` — top level field in init, not nested under `def:`
 11. Collection assembly — rules come from calling prompt `fragments:` block, not from `_index.prompt`
-12. `response` block removed — JSON written directly as prose in prompt body
+
+**What changed from v1.1 — v1.2 parser + compiler updates needed:**
+
+1. `response do / end response` — new block type in prompt body; lexer + parser must handle it
+2. `{response_contract}` — new reserved fragment reference; compiler replaces with derived contract JSON
+3. `@major` field — parse alongside `@version` in init block; validate ≥ 1
+4. `@version` now `major.minor` string format — parser accepts both `1` and `1.0`
+5. `DotPrompt.Result` struct — all public API functions return struct, not bare tuple
+6. `ResponseCollector` compiler stage — post-case/post-vary collection of response blocks
+7. Contract comparison — identical → silent, compatible → warning, incompatible → error
+8. `validate_output/3` — new public API, validates JSON string against derived schema
+9. `GET /api/schema/:prompt/:major` — new route, reads from archive/
+10. `POST /api/version` and `POST /webhooks/commit` — new server endpoints
+11. `GET /api/events` — new SSE stream endpoint
+12. `.snapshots/` management — container writes/clears on save/commit events
 
 **Vary compositor update:**
 Vary variable name is now the slot identifier not a positional name.
@@ -1248,8 +1695,7 @@ Branch lookup uses branch name not letter index.
 When path resolves to directory: load `_index.prompt`, read its params,
 then apply assembly rules from the calling prompt's fragment declaration.
 `match: @var` — resolve var value, match against fragment `def.match` fields exactly.
-12. `matchRe: pattern` — compile regex, interpolate `@var` references (enum variables only), match against `def.match` fields.
-13. `match: all` — return all `.prompt` files in folder except `_index.prompt`.
+`matchRe: pattern` — compile regex, interpolate `@var` references (enum variables only), match against `def.match` fields.
+`match: all` — return all `.prompt` files in folder except `_index.prompt`.
 Apply `limit` and `order` after matching.
 Composite matched fragments in order — join with double newline.
-```

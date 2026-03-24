@@ -17,7 +17,9 @@ defmodule DotPrompt.ContractTest do
       end @is_question
       """
 
-      assert {:ok, result, _, _, _, _, _} = DotPrompt.compile(content, %{is_question: true})
+      assert {:ok, %DotPrompt.Result{prompt: result}} =
+               DotPrompt.compile(content, %{is_question: true})
+
       assert is_binary(result)
     end
 
@@ -36,12 +38,14 @@ defmodule DotPrompt.ContractTest do
 
         question: Answer the question.
         response do
-          {"response_type": "question", "answer": "string"}
+          {"response_type": "question", "content": "string"}
         end response
       end @mode
       """
 
-      assert {:ok, result, _, _, _, _, _} = DotPrompt.compile(content, %{mode: "teaching"})
+      assert {:ok, %DotPrompt.Result{prompt: result}} =
+               DotPrompt.compile(content, %{mode: "teaching"})
+
       assert is_binary(result)
     end
   end
@@ -73,10 +77,10 @@ defmodule DotPrompt.ContractTest do
       json = ~s({"name": "Alice", "count": 42, "active": true})
       schema = ResponseCollector.derive_schema(json)
 
-      name_schema = Map.get(schema, "name")
-      assert name_schema[:type] == "string"
-      assert Map.get(schema, "count")[:type] == "number"
-      assert Map.get(schema, "active")[:type] == "boolean"
+      name_schema = Map.get(schema["properties"], "name")
+      assert name_schema["type"] == "string"
+      assert Map.get(schema["properties"], "count")["type"] == "integer"
+      assert Map.get(schema["properties"], "active")["type"] == "boolean"
     end
 
     test "compares identical schemas" do

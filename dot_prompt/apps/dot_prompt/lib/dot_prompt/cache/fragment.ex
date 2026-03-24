@@ -36,7 +36,7 @@ defmodule DotPrompt.Cache.Fragment do
 
   def invalidate_path(path) do
     # Using match_delete is more efficient than foldl + delete if we can structure the key
-    # But currently keys are hashes. If we want path-based invalidation, 
+    # But currently keys are hashes. If we want path-based invalidation,
     # we need to include path in the key or use a secondary index.
     # For now, keeping foldl but making it slightly safer.
     keys =

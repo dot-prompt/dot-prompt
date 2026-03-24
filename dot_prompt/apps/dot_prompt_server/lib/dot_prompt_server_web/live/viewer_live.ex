@@ -211,7 +211,7 @@ defmodule DotPromptServerWeb.ViewerLive do
     params = parse_json(socket.assigns.params_input)
 
     case DotPrompt.compile(socket.assigns.selected_prompt, params, annotated: true) do
-      {:ok, template, _vary_selections, _used, _files, _cache_hit, _warnings} ->
+      {:ok, %DotPrompt.Result{prompt: template}} ->
         # Debug: check if sections exist in the template
         if !String.contains?(template, "[[section") do
           Logger.warning(
@@ -231,7 +231,7 @@ defmodule DotPromptServerWeb.ViewerLive do
     runtime = parse_json(socket.assigns.runtime_input)
 
     case DotPrompt.render(socket.assigns.selected_prompt, params, runtime) do
-      {:ok, result, _vary_selections, _injected_tokens, _cache_hit} ->
+      {:ok, %DotPrompt.Result{prompt: result}} ->
         {:noreply, assign(socket, final_output: result, error: nil)}
 
       {:error, details} ->

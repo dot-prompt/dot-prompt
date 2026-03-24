@@ -5,11 +5,11 @@ defmodule DotPrompt do
   require Logger
 
   alias DotPrompt.Parser.{Lexer, Parser, Validator}
-  alias DotPrompt.Compiler.{IfResolver, CaseResolver, VaryCompositor}
-  alias DotPrompt.Compiler.FragmentExpander.Static, as: FragmentStatic
+  alias DotPrompt.Compiler.{CaseResolver, IfResolver, VaryCompositor}
   alias DotPrompt.Compiler.FragmentExpander.Collection, as: FragmentCollection
   alias DotPrompt.Compiler.FragmentExpander.Dynamic, as: FragmentDynamic
-  alias DotPrompt.Cache.{Structural, Fragment, Vary}
+  alias DotPrompt.Compiler.FragmentExpander.Static, as: FragmentStatic
+  alias DotPrompt.Cache.{Fragment, Structural, Vary}
   alias DotPrompt.Injector
   alias DotPrompt.Telemetry
 
@@ -78,24 +78,39 @@ defmodule DotPrompt do
   end
 
   @doc "Extracts the schema and metadata for a given prompt."
-  @spec schema(prompt_name()) :: {:ok, schema_info()} | {:error, map()}
-  def schema(prompt_name) do
-    try do
-      {_content_for_mtime, mtime, path} = load_prompt_file_with_meta(prompt_name)
+  @spec schema(prompt_name(), integer() | nil) :: {:ok, schema_info()} | {:error, map()}
+  def schema(prompt_name, major \\ nil) do
+    prompts_dir = prompts_dir()
 
-      case Fragment.get({:schema, to_string(prompt_name), mtime}) do
-        {:ok, result} ->
-          {:ok, result}
-
-        _ ->
-          do_parse_schema(prompt_name, path, mtime)
+    {mtime, _path_for_cache} =
+      if is_binary(prompt_name) and !String.contains?(prompt_name, "\n") and
+           !String.contains?(prompt_name, " ") do
+        p = Path.join(prompts_dir, prompt_name <> ".prompt")
+        {if(File.exists?(p), do: File.stat!(p).mtime, else: 0), p}
+      else
+        {0, nil}
       end
-    rescue
-      _ -> {:error, %{error: "prompt_not_found"}}
+
+    case Fragment.get({:schema, to_string(prompt_name), major, mtime}) do
+      {:ok, result} ->
+        {:ok, result}
+
+      _ ->
+        try do
+          {_content, actual_mtime, path} = load_prompt_file_with_meta(prompt_name, major)
+          do_parse_schema(prompt_name, path, actual_mtime, major)
+        rescue
+          _ ->
+            {:error,
+             %{
+               error: "prompt_not_found",
+               message: "Could not find prompt #{prompt_name} (major: #{major || "latest"})"
+             }}
+        end
     end
   end
 
-  defp do_parse_schema(prompt_name, path, mtime) do
+  defp do_parse_schema(prompt_name, path, mtime, major) do
     try do
       content = File.read!(path)
       tokens = Lexer.tokenize(content)
@@ -145,34 +160,50 @@ defmodule DotPrompt do
           result =
             Map.merge(def_block, %{
               name: to_string(prompt_name),
+              major: def_block[:major] || 1,
               version: def_block[:version] || 1,
               params: schema_params,
               fragments: schema_fragments,
               docs: docs
             })
 
-          Fragment.put({:schema, to_string(prompt_name), mtime}, result)
+          Fragment.put({:schema, to_string(prompt_name), major, mtime}, result)
           {:ok, result}
       end
     rescue
       e ->
-        IO.inspect(e, label: "SCHEMA PARSE ERROR")
         {:error, %{error: "parsing_failed", message: inspect(e)}}
     end
   end
 
   @doc """
   Compiles a prompt for given params.
-  Returns {:ok, result, vary_selections, used_vars, files, cache_hit, warnings}
+  Returns {:ok, %DotPrompt.Result{}} or {:error, map()}
   """
   @spec compile(prompt_name() | String.t(), params(), compile_opts()) ::
-          {:ok, String.t(), map(), MapSet.t(), map(), boolean(), [String.t()]} | {:error, map()}
+          {:ok, DotPrompt.Result.t()} | {:error, map()}
   def compile(prompt_name_or_content, params, opts \\ []) do
     case compile_to_iodata(prompt_name_or_content, params, opts) do
-      {:ok, skeleton_iodata, final_selections, used_vars, cached_files_meta, hit, warnings} ->
-        # Flatten only at the top level call
+      {:ok, skeleton_iodata, final_selections, used_vars, cached_files_meta, hit, warnings,
+       response_contract, major, version} ->
         skeleton = IO.iodata_to_binary(skeleton_iodata)
-        {:ok, skeleton, final_selections, used_vars, cached_files_meta, hit, warnings}
+
+        result = %DotPrompt.Result{
+          prompt: skeleton,
+          response_contract: response_contract,
+          vary_selections: final_selections,
+          compiled_tokens: count_tokens(skeleton),
+          cache_hit: hit,
+          major: major,
+          version: version,
+          metadata: %{
+            used_vars: used_vars,
+            files: cached_files_meta,
+            warnings: warnings
+          }
+        }
+
+        {:ok, result}
 
       {:error, _} = err ->
         err
@@ -183,7 +214,9 @@ defmodule DotPrompt do
   Internal compile that returns iodata for maximum efficiency when nesting fragments.
   """
   @spec compile_to_iodata(prompt_name() | String.t(), params(), compile_opts()) ::
-          {:ok, iodata(), map(), MapSet.t(), map(), boolean(), [String.t()]} | {:error, map()}
+          {:ok, iodata(), map(), MapSet.t(), map(), boolean(), [String.t()], map() | nil,
+           integer(), integer() | String.t()}
+          | {:error, map()}
   def compile_to_iodata(prompt_name_or_content, params, opts \\ []) do
     annotated = Keyword.get(opts, :annotated, false)
     start_time = System.monotonic_time()
@@ -212,14 +245,15 @@ defmodule DotPrompt do
            String.contains?(prompt_name_or_content, " ") do
         {prompt_name_or_content, %{}}
       else
-        {content, mtime, path} = load_prompt_file_with_meta(prompt_name_or_content)
+        major = Keyword.get(opts, :major)
+        {content, mtime, path} = load_prompt_file_with_meta(prompt_name_or_content, major)
         {content, %{path => mtime}}
       end
 
-    cache_key = cache_key_for_compile(prompt_key, params, content)
+    cache_key = cache_key_for_compile(prompt_key, params, content, annotated)
 
     case Structural.get(cache_key) do
-      {:ok, {skeleton_iodata, vary_map, used_vars, cached_files_meta, _version}} ->
+      {:ok, {skeleton_iodata, vary_map, used_vars, cached_files_meta, major, version}} ->
         if stale?(cached_files_meta) do
           # Stale cache, proceed with fresh compilation
           compile_fresh_with_content(
@@ -264,7 +298,15 @@ defmodule DotPrompt do
             }
           )
 
-          {:ok, output_skeleton, final_selections, used_vars, cached_files_meta, true, []}
+          # Extract contract from cache
+          response_contract =
+            case Structural.get({:contract, cache_key}) do
+              {:ok, contract} -> contract
+              _ -> nil
+            end
+
+          {:ok, output_skeleton, final_selections, used_vars, cached_files_meta, true, [],
+           response_contract, major, version}
         end
 
       # Handle legacy cache format or miss
@@ -291,171 +333,244 @@ defmodule DotPrompt do
          cache_key
        ) do
     annotated = Keyword.get(opts, :annotated, false)
-
     tokens = Lexer.tokenize(content)
 
     case Parser.parse(tokens) do
       {:error, message} ->
-        # Extract line number from error message if available
-        error_msg = extract_error_with_line(message, tokens)
-
-        Logger.error("dot-prompt compilation error: #{error_msg}")
-
-        Telemetry.stop_render(
-          to_string(prompt_name_or_content),
-          params,
-          System.convert_time_unit(
-            System.monotonic_time() - start_time,
-            :native,
-            :millisecond
-          ),
-          %{compiled_tokens: 0}
-        )
-
-        {:error, %{error: "syntax_error", message: error_msg}}
+        handle_parsing_error(prompt_name_or_content, params, start_time, message, tokens)
 
       {:ok, ast} ->
         case Validator.validate(ast) do
           {:ok, warnings} ->
-            init = ast.init || %{params: %{}, fragments: %{}, docs: nil}
-            # For schema extraction, we need the raw specs
-            declarations = Validator.parse_param_declarations_for_schema(init)
-
-            params_with_defaults = apply_defaults(params, declarations)
-
-            case validate_params_if_needed(params_with_defaults, declarations) do
-              :ok ->
-                fragment_defs = Validator.parse_fragment_declarations(init)
-                indent_start = opts[:indent] || 0
-
-                case compile_ast(
-                       ast.body,
-                       params_with_defaults,
-                       fragment_defs,
-                       %{},
-                       MapSet.new(),
-                       indent_start,
-                       files_meta,
-                       0,
-                       declarations
-                     ) do
-                  {:error, reason} ->
-                    # Wrap fragment or other compilation errors
-                    reason_with_line = add_line_info_to_validation_error(reason, content)
-                    Logger.error("dot-prompt compilation error: #{reason_with_line}")
-
-                    Telemetry.stop_render(
-                      to_string(prompt_name_or_content),
-                      params,
-                      System.convert_time_unit(
-                        System.monotonic_time() - start_time,
-                        :native,
-                        :millisecond
-                      ),
-                      %{compiled_tokens: 0}
-                    )
-
-                    {:error, %{error: "validation_error", message: reason_with_line}}
-
-                  {skeleton_iodata, vary_map, used_vars, total_files_meta, _count} ->
-                    seed = opts[:seed]
-
-                    # Extract version for cache key stability
-                    version =
-                      case Validator.parse_def_block(ast.init) do
-                        %{version: v} -> v
-                        _ -> 1
-                      end
-
-                    # Convert iodata to binary for resolution and token counting
-                    skeleton_binary = IO.iodata_to_binary(skeleton_iodata)
-
-                    {output_skeleton, vary_selections} =
-                      if annotated do
-                        {_resolved, selections} =
-                          VaryCompositor.resolve_full(
-                            skeleton_binary,
-                            vary_map,
-                            seed,
-                            params_with_defaults
-                          )
-
-                        {skeleton_iodata, selections}
-                      else
-                        {resolved, selections} =
-                          VaryCompositor.resolve_full(
-                            skeleton_binary,
-                            vary_map,
-                            seed,
-                            params_with_defaults
-                          )
-
-                        {strip_annotations(resolved), selections}
-                      end
-
-                    Structural.put(
-                      cache_key,
-                      {skeleton_iodata, vary_map, used_vars, total_files_meta, version}
-                    )
-
-                    duration = System.monotonic_time() - start_time
-                    compiled_tokens = count_tokens(output_skeleton)
-
-                    Telemetry.stop_render(
-                      to_string(prompt_name_or_content),
-                      params,
-                      System.convert_time_unit(duration, :native, :millisecond),
-                      %{
-                        compiled_tokens: compiled_tokens,
-                        vary_selections: vary_selections,
-                        cache_hit: false
-                      }
-                    )
-
-                    {:ok, output_skeleton, vary_selections, used_vars, total_files_meta, false,
-                     warnings}
-                end
-
-              {:error, reason} ->
-                # Add line number info to validation errors
-                reason_with_line = add_line_info_to_validation_error(reason, content)
-
-                Logger.error("dot-prompt validation error: #{reason_with_line}")
-
-                Telemetry.stop_render(
-                  to_string(prompt_name_or_content),
-                  params,
-                  System.convert_time_unit(
-                    System.monotonic_time() - start_time,
-                    :native,
-                    :millisecond
-                  ),
-                  %{compiled_tokens: 0}
-                )
-
-                {:error, %{error: "validation_error", message: reason_with_line}}
-            end
-
-          {:error, reason} ->
-            # Add line number info to validation errors
-            reason_with_line = add_line_info_to_validation_error(reason, content)
-
-            Logger.error("dot-prompt validation error: #{reason_with_line}")
-
-            Telemetry.stop_render(
-              to_string(prompt_name_or_content),
+            process_valid_ast(
+              prompt_name_or_content,
+              content,
+              files_meta,
               params,
-              System.convert_time_unit(
-                System.monotonic_time() - start_time,
-                :native,
-                :millisecond
-              ),
-              %{compiled_tokens: 0}
+              opts,
+              start_time,
+              cache_key,
+              annotated,
+              ast,
+              warnings
             )
 
-            {:error, %{error: "validation_error", message: reason_with_line}}
+          {:error, reason} ->
+            handle_validation_error(prompt_name_or_content, params, start_time, reason, content)
         end
     end
+  end
+
+  defp handle_parsing_error(prompt_name, params, start_time, message, tokens) do
+    error_msg = extract_error_with_line(message, tokens)
+    Logger.error("dot-prompt compilation error: #{error_msg}")
+
+    Telemetry.stop_render(
+      to_string(prompt_name),
+      params,
+      System.convert_time_unit(System.monotonic_time() - start_time, :native, :millisecond),
+      %{compiled_tokens: 0}
+    )
+
+    {:error, %{error: "syntax_error", message: error_msg}}
+  end
+
+  defp handle_validation_error(prompt_name, params, start_time, reason, content) do
+    reason_with_line = add_line_info_to_validation_error(reason, content)
+    Logger.error("dot-prompt validation error: #{reason_with_line}")
+
+    Telemetry.stop_render(
+      to_string(prompt_name),
+      params,
+      System.convert_time_unit(System.monotonic_time() - start_time, :native, :millisecond),
+      %{compiled_tokens: 0}
+    )
+
+    {:error, %{error: "validation_error", message: reason_with_line}}
+  end
+
+  defp process_valid_ast(
+         prompt_name_or_content,
+         content,
+         files_meta,
+         params,
+         opts,
+         start_time,
+         cache_key,
+         annotated,
+         ast,
+         warnings
+       ) do
+    init = ast.init || %{params: %{}, fragments: %{}, docs: nil}
+    declarations = Validator.parse_param_declarations_for_schema(init)
+    params_with_defaults = apply_defaults(params, declarations)
+
+    case validate_params_if_needed(params_with_defaults, declarations) do
+      :ok ->
+        fragment_defs = Validator.parse_fragment_declarations(init)
+        indent_start = opts[:indent] || 0
+
+        case handle_response_contracts(ast.body, warnings) do
+          {:error, msg} ->
+            {:error, %{error: "validation_error", message: msg}}
+
+          {:ok, warnings, first_schema} ->
+            compile_and_build_result(
+              prompt_name_or_content,
+              content,
+              params,
+              opts,
+              start_time,
+              cache_key,
+              annotated,
+              ast,
+              warnings,
+              params_with_defaults,
+              fragment_defs,
+              indent_start,
+              files_meta,
+              declarations,
+              first_schema
+            )
+        end
+
+      {:error, reason} ->
+        handle_validation_error(
+          prompt_name_or_content,
+          params,
+          start_time,
+          reason,
+          content
+        )
+    end
+  end
+
+  defp handle_response_contracts(body, warnings) do
+    response_blocks = DotPrompt.Compiler.ResponseCollector.collect_response_blocks(body)
+
+    schemas =
+      Enum.map(response_blocks, fn {content, _line} ->
+        DotPrompt.Compiler.ResponseCollector.derive_schema(content)
+      end)
+
+    comparison = DotPrompt.Compiler.ResponseCollector.compare_schemas(schemas)
+
+    case comparison do
+      :incompatible ->
+        {:error, "incompatible_contracts: response blocks have incompatible schemas"}
+
+      _ ->
+        first_schema = Enum.at(schemas, 0)
+
+        maybe_warn =
+          if comparison == :compatible,
+            do: ["compatible_contracts: response blocks have same fields but different values"],
+            else: []
+
+        {:ok, warnings ++ maybe_warn, first_schema}
+    end
+  end
+
+  defp compile_and_build_result(
+         prompt_name_or_content,
+         content,
+         params,
+         opts,
+         start_time,
+         cache_key,
+         annotated,
+         ast,
+         warnings,
+         params_with_defaults,
+         fragment_defs,
+         indent_start,
+         files_meta,
+         declarations,
+         first_schema
+       ) do
+    case compile_ast(
+           ast.body,
+           params_with_defaults,
+           fragment_defs,
+           %{},
+           MapSet.new(),
+           indent_start,
+           files_meta,
+           0,
+           declarations
+         ) do
+      {:error, reason} ->
+        reason_with_line = add_line_info_to_validation_error(reason, content)
+        Logger.error("dot-prompt compilation error: #{reason_with_line}")
+
+        Telemetry.stop_render(
+          to_string(prompt_name_or_content),
+          params,
+          System.convert_time_unit(System.monotonic_time() - start_time, :native, :millisecond),
+          %{compiled_tokens: 0}
+        )
+
+        {:error, %{error: "validation_error", message: reason_with_line}}
+
+      {skeleton_iodata, vary_map, used_vars, total_files_meta, _count} ->
+        seed = opts[:seed]
+        def_info = Validator.parse_def_block(ast.init)
+        version = def_info[:version] || 1
+        major = def_info[:major] || 1
+
+        skeleton_binary = IO.iodata_to_binary(skeleton_iodata)
+
+        skeleton_binary =
+          if first_schema do
+            schema_json = Jason.encode!(first_schema, pretty: true)
+            String.replace(skeleton_binary, "{response_contract}", schema_json)
+          else
+            skeleton_binary
+          end
+
+        {output_skeleton, vary_selections} =
+          resolve_and_strip(skeleton_binary, vary_map, seed, params_with_defaults, annotated)
+
+        Structural.put(
+          cache_key,
+          {skeleton_iodata, vary_map, used_vars, total_files_meta, major, version}
+        )
+
+        if first_schema do
+          Structural.put({:contract, cache_key}, first_schema)
+        end
+
+        duration = System.monotonic_time() - start_time
+        compiled_tokens = count_tokens(output_skeleton)
+
+        Telemetry.stop_render(
+          to_string(prompt_name_or_content),
+          params,
+          System.convert_time_unit(duration, :native, :millisecond),
+          %{
+            compiled_tokens: compiled_tokens,
+            vary_selections: vary_selections,
+            cache_hit: false
+          }
+        )
+
+        {:ok, output_skeleton, vary_selections, used_vars, total_files_meta, false, warnings,
+         first_schema, major, version}
+    end
+  end
+
+  defp resolve_and_strip(skeleton_binary, vary_map, seed, params, true) do
+    {_resolved, selections} =
+      VaryCompositor.resolve_full(skeleton_binary, vary_map, seed, params)
+
+    {skeleton_binary, selections}
+  end
+
+  defp resolve_and_strip(skeleton_binary, vary_map, seed, params, false) do
+    {resolved, selections} =
+      VaryCompositor.resolve_full(skeleton_binary, vary_map, seed, params)
+
+    {strip_annotations(resolved), selections}
   end
 
   def inject(template, runtime) do
@@ -466,17 +581,24 @@ defmodule DotPrompt do
   Renders a prompt by compiling it and injecting runtime data.
   """
   @spec render(prompt_name() | String.t(), params(), runtime(), compile_opts()) ::
-          {:ok, String.t(), map(), integer(), boolean()} | {:error, map()}
+          {:ok, DotPrompt.Result.t()} | {:error, map()}
   def render(prompt_name_or_content, params, runtime, opts \\ []) do
     # Normalize params/runtime to use atom keys
     params = Enum.into(params, %{}, fn {k, v} -> {ensure_atom(k), v} end)
     runtime = Enum.into(runtime, %{}, fn {k, v} -> {ensure_atom(k), v} end)
 
     case compile(prompt_name_or_content, params, opts) do
-      {:ok, template, vary_selections, _used_vars, _files, cache_hit, _warnings} ->
-        result = inject(template, runtime)
-        injected_tokens = count_tokens(result)
-        {:ok, result, vary_selections, injected_tokens, cache_hit}
+      {:ok, %DotPrompt.Result{} = compile_result} ->
+        result_prompt = inject(compile_result.prompt, runtime)
+        injected_tokens = count_tokens(result_prompt)
+
+        final_result = %{
+          compile_result
+          | prompt: result_prompt,
+            injected_tokens: injected_tokens
+        }
+
+        {:ok, final_result}
 
       {:error, _} = error ->
         error
@@ -631,340 +753,471 @@ defmodule DotPrompt do
        ) do
     indent = String.duplicate("  ", indent_level)
 
-    Enum.reduce_while(nodes, {[], vary_map, used_vars, files_meta, section_count}, fn node,
-                                                                                      {acc_text,
-                                                                                       acc_vary,
-                                                                                       acc_vars,
-                                                                                       acc_files,
-                                                                                       acc_count} ->
+    Enum.reduce_while(nodes, {[], vary_map, used_vars, files_meta, section_count}, fn node, acc ->
       case node do
         {:text, t} ->
-          # Extract variables more efficiently
-          vars_in_text = Regex.scan(~r/@(\w+)/, t, capture: :all_but_first) |> List.flatten()
-          new_vars = Enum.reduce(vars_in_text, acc_vars, &MapSet.put(&2, &1))
-
-          interpolated =
-            Enum.reduce(params, t, fn {key, value}, inner_acc ->
-              # Params are atoms, so interpolate using string name
-              key_str = to_string(key)
-              val_str = if is_list(value), do: Enum.join(value, ", "), else: to_string(value)
-              String.replace(inner_acc, "@#{key_str}", val_str)
-            end)
-
-          # Indent every line efficiently
-          indented_text =
-            interpolated
-            |> String.split("\n")
-            |> Enum.map(fn line -> if line == "", do: "\n", else: [indent, line, "\n"] end)
-
-          {:cont, {[acc_text, indented_text], acc_vary, new_vars, acc_files, acc_count}}
+          handle_text_node(t, params, indent, acc)
 
         {:if, var, cond, then_nodes, elifs, else_node} ->
-          var_name_str = String.trim_leading(var, "@")
-          var_value = get_param(params, var_name_str)
-
-          current_vars = MapSet.put(acc_vars, var_name_str)
-
-          {nodes_to_compile, val_label} =
-            cond do
-              IfResolver.resolve(var_value, cond) && then_nodes != [] ->
-                {then_nodes, "true"}
-
-              match =
-                  Enum.find(elifs, fn {c, nodes} ->
-                    IfResolver.resolve(var_value, c) && nodes != []
-                  end) ->
-                {c, ns} = match
-                {ns, to_string(c)}
-
-              else_node && else_node != [] ->
-                {else_node, "false"}
-
-              true ->
-                {nil, nil}
-            end
-
-          nodes_result =
-            if nodes_to_compile do
-              compile_ast(
-                nodes_to_compile,
-                params,
-                fragment_defs,
-                acc_vary,
-                current_vars,
-                indent_level + 1,
-                acc_files,
-                acc_count + 1,
-                declarations
-              )
-            else
-              {"", acc_vary, current_vars, acc_files, acc_count}
-            end
-
-          case nodes_result do
-            {:error, _} = err ->
-              {:halt, err}
-
-            {inner_text, inner_vary, inner_vars, inner_files, inner_count} ->
-              options =
-                case Map.get(declarations || %{}, var_name_str) do
-                  %{type: :enum, values: values} -> Enum.join(values, ",")
-                  _ -> "true,false"
-                end
-
-              result_text =
-                if val_label do
-                  [
-                    "\n[[section:branch:",
-                    to_string(indent_level),
-                    ":",
-                    to_string(acc_count),
-                    ":",
-                    var_name_str,
-                    ":",
-                    options,
-                    ":",
-                    var,
-                    " → ",
-                    val_label,
-                    "]]\n",
-                    inner_text,
-                    "\n\n[[/section]]\n"
-                  ]
-                else
-                  inner_text
-                end
-
-              {:cont, {[acc_text, result_text], inner_vary, inner_vars, inner_files, inner_count}}
-          end
+          handle_if_node(
+            var,
+            cond,
+            then_nodes,
+            elifs,
+            else_node,
+            params,
+            declarations,
+            indent_level,
+            acc
+          )
 
         {:case, var, branches} ->
-          var_name_str = String.trim_leading(var, "@")
-          var_value = get_param(params, var_name_str)
-
-          current_vars = MapSet.put(acc_vars, var_name_str)
-
-          nodes_to_compile = CaseResolver.resolve(var_value, branches)
-
-          # Find the label for the matched branch
-          match_label =
-            case Enum.find(branches, fn
-                   branch when is_tuple(branch) and tuple_size(branch) == 3 ->
-                     {id, _lbl, _ns} = branch
-                     to_string(id) == to_string(var_value)
-
-                   {:if, var, _, _, _, _} ->
-                     to_string(var) == to_string(var_value)
-
-                   _ ->
-                     false
-                 end) do
-              {_id, lbl, _ns} -> lbl
-              {:if, var, _, _, _, _} -> to_string(var)
-              _ -> to_string(var_value)
-            end
-
-          # Get possible values for dropdown
-          options =
-            case Map.get(declarations || %{}, var_name_str) do
-              %{values: vals} when is_list(vals) -> Enum.join(vals, ",")
-              _ -> ""
-            end
-
-          result =
-            if nodes_to_compile != [] do
-              compile_ast(
-                nodes_to_compile,
-                params,
-                fragment_defs,
-                acc_vary,
-                current_vars,
-                indent_level + 1,
-                acc_files,
-                acc_count + 1,
-                declarations
-              )
-            else
-              {"", acc_vary, current_vars, acc_files, acc_count}
-            end
-
-          case result do
-            {:error, _} = err ->
-              {:halt, err}
-
-            {inner_text, inner_vary, inner_vars, inner_files, inner_count} ->
-              section_header = [
-                "\n[[section:case:",
-                to_string(indent_level),
-                ":",
-                to_string(acc_count),
-                ":",
-                var_name_str,
-                ":",
-                options,
-                ":",
-                var,
-                " → ",
-                to_string(match_label),
-                "]]\n"
-              ]
-
-              {:cont,
-               {[acc_text, section_header, inner_text, "[[/section]]\n"], inner_vary, inner_vars,
-                inner_files, inner_count}}
-          end
+          handle_case_node(var, branches, params, declarations, indent_level, acc)
 
         {:vary, name, branches} ->
-          options = Enum.map_join(branches, ",", fn {k, _, _} -> to_string(k) end)
-          placeholder = ["[[vary:\"", to_string(name), "\"]]"]
-
-          result =
-            Enum.reduce_while(
-              branches,
-              {[], acc_vary, acc_vars, acc_files, acc_count},
-              fn {id, label, nodes}, {acc_b, var_acc, vars_acc, files_acc, count_acc} ->
-                case compile_ast(
-                       nodes,
-                       params,
-                       fragment_defs,
-                       var_acc,
-                       vars_acc,
-                       0,
-                       files_acc,
-                       0,
-                       declarations
-                     ) do
-                  {:error, _} = err ->
-                    {:halt, err}
-
-                  {branch_text, branch_vary, branch_vars, branch_files, _} ->
-                    # branch_text is iodata, convert to string for the map
-                    branch_str = IO.iodata_to_binary(branch_text)
-
-                    {:cont,
-                     {acc_b ++ [{id, label, branch_str}], branch_vary, branch_vars, branch_files,
-                      count_acc}}
-                end
-              end
-            )
-
-          case result do
-            {:error, _} = err ->
-              {:halt, err}
-
-            {compiled_branches, inner_vary, inner_vars, inner_files, inner_count} ->
-              new_vary = Map.put(inner_vary, name, compiled_branches)
-
-              section_header = [
-                "\n[[section:vary:",
-                to_string(indent_level),
-                ":",
-                to_string(acc_count),
-                ":",
-                "_vary_#{name}",
-                ":",
-                options,
-                ":",
-                name,
-                "]]\n"
-              ]
-
-              {:cont,
-               {[acc_text, section_header, placeholder, "\n\n[[/section]]\n"], new_vary,
-                inner_vars, inner_files, inner_count}}
-          end
+          handle_vary_node(name, branches, params, fragment_defs, declarations, indent_level, acc)
 
         {:fragment_static, path} ->
-          # Trim braces to match the keys in fragment_defs
-          name = path |> String.trim_leading("{") |> String.trim_trailing("}")
-
-          case Map.get(fragment_defs, name) do
-            %{type: type} = spec ->
-              from = spec[:from] || name
-
-              if String.ends_with?(from, "/") or !String.contains?(from, ".") do
-                case FragmentCollection.expand(
-                       from,
-                       params,
-                       indent_level,
-                       acc_files,
-                       acc_count,
-                       spec
-                     ) do
-                  {:ok, inner_text, child_files, child_count} ->
-                    {:cont,
-                     {[acc_text, inner_text], acc_vary, acc_vars, child_files, child_count}}
-
-                  {:error, reason} ->
-                    {:halt, {:error, reason}}
-                end
-              else
-                fragment_result =
-                  if String.starts_with?(type, "static") do
-                    FragmentStatic.expand(from, params)
-                  else
-                    FragmentDynamic.expand(from, params)
-                  end
-
-                case fragment_result do
-                  {:ok, content_result, child_files} ->
-                    indented_content = indent_content(content_result, indent)
-
-                    clean_name = String.replace_suffix(name, ".prompt", "")
-                    clean_from = String.replace_suffix(from, ".prompt", "")
-
-                    {:cont,
-                     {[
-                        acc_text,
-                        "\n[[section:frag:#{indent_level}:#{acc_count}:::fragment: #{clean_name} → #{clean_from}]]\n#{indented_content}\n[[/section]]\n"
-                      ], acc_vary, acc_vars, Map.merge(acc_files, child_files), acc_count + 1}}
-
-                  {:error, reason} ->
-                    {:halt, {:error, reason}}
-                end
-              end
-
-            _ ->
-              if String.ends_with?(path, "/") or !String.contains?(path, ".") do
-                case FragmentCollection.expand(path, params, indent_level, acc_files, acc_count) do
-                  {:ok, inner_text, child_files, child_count} ->
-                    {:cont,
-                     {[acc_text, inner_text], acc_vary, acc_vars, child_files, child_count}}
-
-                  {:error, reason} ->
-                    {:halt, {:error, reason}}
-                end
-              else
-                case FragmentStatic.expand(path, params) do
-                  {:ok, content_result, child_files} ->
-                    indented_content = indent_content(content_result, indent)
-
-                    clean_path = String.replace_suffix(path, ".prompt", "")
-
-                    {:cont,
-                     {[
-                        acc_text,
-                        "\n[[section:frag:#{indent_level}:#{acc_count}:::fragment: #{clean_path} → #{clean_path}]]\n#{indented_content}\n[[/section]]\n"
-                      ], acc_vary, acc_vars, Map.merge(acc_files, child_files), acc_count + 1}}
-
-                  {:error, reason} ->
-                    {:halt, {:error, reason}}
-                end
-              end
-          end
+          handle_static_fragment(path, fragment_defs, params, indent, acc)
 
         {:fragment_dynamic, path} ->
-          {:cont, {[acc_text, path], acc_vary, acc_vars, acc_files, acc_count}}
+          handle_dynamic_fragment(path, acc)
 
         _ ->
-          {:cont, {acc_text, acc_vary, acc_vars, acc_files, acc_count}}
+          {:cont, acc}
       end
     end)
-    |> case do
-      {:error, _} = err -> err
-      {text, v, vars, f, c} -> {text, v, vars, f, c}
+    |> wrap_result()
+  end
+
+  defp handle_text_node(
+         text,
+         params,
+         indent,
+         {acc_text, acc_vary, acc_vars, acc_files, acc_count}
+       ) do
+    vars_in_text = Regex.scan(~r/@(\w+)/, text, capture: :all_but_first) |> List.flatten()
+    new_vars = Enum.reduce(vars_in_text, acc_vars, &MapSet.put(&2, &1))
+
+    interpolated =
+      Enum.reduce(params, text, fn {key, value}, inner_acc ->
+        key_str = to_string(key)
+        val_str = if is_list(value), do: Enum.join(value, ", "), else: to_string(value)
+        String.replace(inner_acc, "@#{key_str}", val_str)
+      end)
+
+    indented_text =
+      interpolated
+      |> String.split("\n")
+      |> Enum.map(fn line -> if line == "", do: "\n", else: [indent, line, "\n"] end)
+
+    {:cont, {[acc_text, indented_text], acc_vary, new_vars, acc_files, acc_count}}
+  end
+
+  defp handle_if_node(
+         var,
+         cond,
+         then_nodes,
+         elifs,
+         else_node,
+         params,
+         declarations,
+         indent_level,
+         {acc_text, acc_vary, acc_vars, acc_files, acc_count}
+       ) do
+    var_name_str = String.trim_leading(var, "@")
+    var_value = get_param(params, var_name_str)
+    current_vars = MapSet.put(acc_vars, var_name_str)
+
+    {nodes_to_compile, val_label} =
+      resolve_if_branch(var_value, cond, then_nodes, elifs, else_node)
+
+    nodes_result =
+      if nodes_to_compile do
+        compile_ast(
+          nodes_to_compile,
+          params,
+          %{},
+          acc_vary,
+          current_vars,
+          indent_level + 1,
+          acc_files,
+          acc_count + 1,
+          declarations
+        )
+      else
+        {"", acc_vary, current_vars, acc_files, acc_count}
+      end
+
+    case nodes_result do
+      {:error, _} = err ->
+        {:halt, err}
+
+      {inner_text, inner_vary, inner_vars, inner_files, inner_count} ->
+        result_text =
+          build_if_result(
+            var_name_str,
+            var,
+            val_label,
+            declarations,
+            indent_level,
+            acc_count,
+            inner_text
+          )
+
+        {:cont, {[acc_text, result_text], inner_vary, inner_vars, inner_files, inner_count}}
     end
   end
+
+  defp resolve_if_branch(var_value, cond, then_nodes, elifs, else_node) do
+    cond do
+      IfResolver.resolve(var_value, cond) && then_nodes != [] ->
+        {then_nodes, "true"}
+
+      true ->
+        case Enum.find(elifs, fn {c, nodes} -> IfResolver.resolve(var_value, c) && nodes != [] end) do
+          nil -> if else_node && else_node != [], do: {else_node, "false"}, else: {nil, nil}
+          {c, ns} -> {ns, to_string(c)}
+        end
+    end
+  end
+
+  defp build_if_result(
+         _var_name_str,
+         _var,
+         nil,
+         _declarations,
+         _indent_level,
+         _acc_count,
+         inner_text
+       ),
+       do: inner_text
+
+  defp build_if_result(
+         var_name_str,
+         var,
+         val_label,
+         declarations,
+         indent_level,
+         acc_count,
+         inner_text
+       ) do
+    options =
+      case Map.get(declarations || %{}, var_name_str) do
+        %{type: :enum, values: values} -> Enum.join(values, ",")
+        _ -> "true,false"
+      end
+
+    [
+      "\n[[section:branch:",
+      to_string(indent_level),
+      ":",
+      to_string(acc_count),
+      ":",
+      var_name_str,
+      ":",
+      options,
+      ":",
+      var,
+      " → ",
+      val_label,
+      "]]\n",
+      inner_text,
+      "\n\n[[/section]]\n"
+    ]
+  end
+
+  defp handle_case_node(
+         var,
+         branches,
+         params,
+         declarations,
+         indent_level,
+         {acc_text, acc_vary, acc_vars, acc_files, acc_count}
+       ) do
+    var_name_str = String.trim_leading(var, "@")
+    var_value = get_param(params, var_name_str)
+    current_vars = MapSet.put(acc_vars, var_name_str)
+    nodes_to_compile = CaseResolver.resolve(var_value, branches)
+    match_label = find_case_match_label(branches, var_value)
+
+    options =
+      case Map.get(declarations || %{}, var_name_str) do
+        %{values: vals} when is_list(vals) -> Enum.join(vals, ",")
+        _ -> ""
+      end
+
+    result =
+      if nodes_to_compile != [] do
+        compile_ast(
+          nodes_to_compile,
+          params,
+          %{},
+          acc_vary,
+          current_vars,
+          indent_level + 1,
+          acc_files,
+          acc_count + 1,
+          declarations
+        )
+      else
+        {"", acc_vary, current_vars, acc_files, acc_count}
+      end
+
+    case result do
+      {:error, _} = err ->
+        {:halt, err}
+
+      {inner_text, inner_vary, inner_vars, inner_files, inner_count} ->
+        section_header = [
+          "\n[[section:case:",
+          to_string(indent_level),
+          ":",
+          to_string(acc_count),
+          ":",
+          var_name_str,
+          ":",
+          options,
+          ":",
+          var,
+          " → ",
+          to_string(match_label),
+          "]]\n"
+        ]
+
+        {:cont,
+         {[acc_text, section_header, inner_text, "[[/section]]\n"], inner_vary, inner_vars,
+          inner_files, inner_count}}
+    end
+  end
+
+  defp find_case_match_label(branches, var_value) do
+    Enum.find_value(branches, fn
+      branch when is_tuple(branch) and tuple_size(branch) == 3 ->
+        {id, lbl, _ns} = branch
+
+        if to_string(id) == to_string(var_value),
+          do: String.trim_leading(lbl, "#") |> String.trim(),
+          else: nil
+
+      {:if, var_name, _, _, _, _} = _branch ->
+        if to_string(var_name) == to_string(var_value), do: to_string(var_name), else: nil
+
+      _ ->
+        nil
+    end) || to_string(var_value)
+  end
+
+  defp handle_vary_node(
+         name,
+         branches,
+         params,
+         fragment_defs,
+         declarations,
+         indent_level,
+         {acc_text, acc_vary, acc_vars, acc_files, acc_count}
+       ) do
+    options = Enum.map_join(branches, ",", fn {k, _, _} -> to_string(k) end)
+    placeholder = ["[[vary:\"", to_string(name), "\"]]"]
+
+    result =
+      Enum.reduce_while(branches, {[], acc_vary, acc_vars, acc_files, acc_count}, fn {id, label,
+                                                                                      nodes},
+                                                                                     {acc_b,
+                                                                                      var_acc,
+                                                                                      vars_acc,
+                                                                                      files_acc,
+                                                                                      count_acc} ->
+        case compile_ast(
+               nodes,
+               params,
+               fragment_defs,
+               var_acc,
+               vars_acc,
+               0,
+               files_acc,
+               0,
+               declarations
+             ) do
+          {:error, _} = err ->
+            {:halt, err}
+
+          {branch_text, branch_vary, branch_vars, branch_files, _} ->
+            branch_str = IO.iodata_to_binary(branch_text)
+
+            {:cont,
+             {acc_b ++ [{id, label, branch_str}], branch_vary, branch_vars, branch_files,
+              count_acc}}
+        end
+      end)
+
+    case result do
+      {:error, _} = err ->
+        {:halt, err}
+
+      {compiled_branches, inner_vary, inner_vars, inner_files, inner_count} ->
+        new_vary = Map.put(inner_vary, name, compiled_branches)
+
+        section_header = [
+          "\n[[section:vary:",
+          to_string(indent_level),
+          ":",
+          to_string(acc_count),
+          ":",
+          "_vary_#{name}",
+          ":",
+          options,
+          ":",
+          name,
+          "]]\n"
+        ]
+
+        {:cont,
+         {[acc_text, section_header, placeholder, "\n\n[[/section]]\n"], new_vary, inner_vars,
+          inner_files, inner_count}}
+    end
+  end
+
+  defp handle_static_fragment(
+         path,
+         fragment_defs,
+         params,
+         indent,
+         {acc_text, acc_vary, acc_vars, acc_files, acc_count}
+       ) do
+    name = path |> String.trim_leading("{") |> String.trim_trailing("}")
+
+    case Map.get(fragment_defs, name) do
+      %{type: type} = spec ->
+        from = spec[:from] || name
+
+        expand_static_fragment(
+          name,
+          from,
+          type,
+          spec,
+          params,
+          indent,
+          acc_text,
+          acc_vary,
+          acc_vars,
+          acc_files,
+          acc_count
+        )
+
+      _ ->
+        expand_fragment_by_path(
+          path,
+          params,
+          indent,
+          acc_text,
+          acc_vary,
+          acc_vars,
+          acc_files,
+          acc_count
+        )
+    end
+  end
+
+  defp expand_static_fragment(
+         name,
+         from,
+         type,
+         spec,
+         params,
+         indent,
+         acc_text,
+         acc_vary,
+         acc_vars,
+         acc_files,
+         acc_count
+       ) do
+    if String.ends_with?(from, "/") or !String.contains?(from, ".") do
+      case FragmentCollection.expand(from, params, 0, acc_files, acc_count, spec) do
+        {:ok, inner_text, child_files, child_count} ->
+          {:cont, {[acc_text, inner_text], acc_vary, acc_vars, child_files, child_count}}
+
+        {:error, reason} ->
+          {:halt, {:error, reason}}
+      end
+    else
+      fragment_result =
+        if String.starts_with?(type, "static"),
+          do: FragmentStatic.expand(from, params),
+          else: FragmentDynamic.expand(from, params)
+
+      case fragment_result do
+        {:ok, content_result, child_files} ->
+          indented_content = indent_content(content_result, indent)
+          clean_name = String.replace_suffix(name, ".prompt", "")
+          clean_from = String.replace_suffix(from, ".prompt", "")
+
+          {:cont,
+           {[
+              acc_text,
+              "\n[[section:frag:0:#{acc_count}:::fragment: ",
+              clean_name,
+              " → ",
+              clean_from,
+              "]]\n",
+              indented_content,
+              "\n[[/section]]\n"
+            ], acc_vary, acc_vars, Map.merge(acc_files, child_files), acc_count + 1}}
+
+        {:error, reason} ->
+          {:halt, {:error, reason}}
+      end
+    end
+  end
+
+  defp expand_fragment_by_path(
+         path,
+         params,
+         indent,
+         acc_text,
+         acc_vary,
+         acc_vars,
+         acc_files,
+         acc_count
+       ) do
+    if String.ends_with?(path, "/") or !String.contains?(path, ".") do
+      case FragmentCollection.expand(path, params, 0, acc_files, acc_count) do
+        {:ok, inner_text, child_files, child_count} ->
+          {:cont, {[acc_text, inner_text], acc_vary, acc_vars, child_files, child_count}}
+
+        {:error, reason} ->
+          {:halt, {:error, reason}}
+      end
+    else
+      case FragmentStatic.expand(path, params) do
+        {:ok, content_result, child_files} ->
+          indented_content = indent_content(content_result, indent)
+          clean_path = String.replace_suffix(path, ".prompt", "")
+
+          {:cont,
+           {[
+              acc_text,
+              "\n[[section:frag:0:#{acc_count}:::fragment: ",
+              clean_path,
+              " → ",
+              clean_path,
+              "]]\n",
+              indented_content,
+              "\n[[/section]]\n"
+            ], acc_vary, acc_vars, Map.merge(acc_files, child_files), acc_count + 1}}
+
+        {:error, reason} ->
+          {:halt, {:error, reason}}
+      end
+    end
+  end
+
+  defp handle_dynamic_fragment(path, {acc_text, acc_vary, acc_vars, acc_files, acc_count}) do
+    {:cont, {[acc_text, path], acc_vary, acc_vars, acc_files, acc_count}}
+  end
+
+  defp wrap_result({:error, _} = err), do: err
+  defp wrap_result({text, v, vars, f, c}), do: {text, v, vars, f, c}
 
   def prompts_dir do
     # Prioritise env override (used in tests)
@@ -993,49 +1246,111 @@ defmodule DotPrompt do
     end
   end
 
-  defp load_prompt_file_with_meta(name) do
+  defp load_prompt_file_with_meta(name, major) do
     prompts_dir = prompts_dir()
-    path = Path.join(prompts_dir, to_string(name))
+    name_str = to_string(name)
+    {content, mtime, full_path} = resolve_prompt_path(prompts_dir, name_str)
 
-    index_path = Path.join(path, "_index.prompt")
+    if major && content do
+      check_major_version(
+        name,
+        major,
+        content,
+        {content, mtime, full_path},
+        prompts_dir,
+        name_str
+      )
+    else
+      if is_nil(content),
+        do: raise("prompt_not_found: #{name}"),
+        else: {content, mtime, full_path}
+    end
+  end
+
+  defp resolve_prompt_path(prompts_dir, name_str) do
+    path = Path.join(prompts_dir, name_str)
 
     cond do
       File.exists?(path) and !File.dir?(path) ->
         {File.read!(path), File.stat!(path).mtime, path}
 
       File.exists?(path <> ".prompt") ->
-        full_path = path <> ".prompt"
-        {File.read!(full_path), File.stat!(full_path).mtime, full_path}
+        p = path <> ".prompt"
+        {File.read!(p), File.stat!(p).mtime, p}
 
-      File.dir?(path) and File.exists?(index_path) ->
-        {File.read!(index_path), File.stat!(index_path).mtime, index_path}
+      File.dir?(path) and File.exists?(Path.join(path, "_index.prompt")) ->
+        p = Path.join(path, "_index.prompt")
+        {File.read!(p), File.stat!(p).mtime, p}
 
       true ->
-        raise "prompt_not_found: #{name}"
+        {nil, nil, nil}
     end
   end
 
-  defp cache_key_for_compile(:inline, params, content) do
+  defp check_major_version(name, major, content, path_info, prompts_dir, name_str) do
+    tokens = Lexer.tokenize(content)
+
+    case Parser.parse(tokens) do
+      {:ok, %{init: %{def: def_map}}} ->
+        file_major = def_map[:major] || 1
+
+        if file_major == major do
+          {content, mtime, full_path} = path_info
+          {content, mtime, full_path}
+        else
+          find_archive_or_raise(name, major, prompts_dir, name_str)
+        end
+
+      _ ->
+        if major == 1 do
+          {content, mtime, full_path} = path_info
+          {content, mtime, full_path}
+        else
+          raise "prompt_not_found: #{name} with major version #{major}"
+        end
+    end
+  end
+
+  defp find_archive_or_raise(name, major, prompts_dir, name_str) do
+    name_parts = Path.split(name_str)
+
+    archive_path =
+      if length(name_parts) > 1 do
+        dir = Path.dirname(name_str)
+        base = Path.basename(name_str)
+        Path.join([prompts_dir, dir, "archive", "#{base}_v#{major}.prompt"])
+      else
+        Path.join([prompts_dir, "archive", "#{name_str}_v#{major}.prompt"])
+      end
+
+    if File.exists?(archive_path) do
+      {File.read!(archive_path), File.stat!(archive_path).mtime, archive_path}
+    else
+      raise "prompt_not_found: #{name} with major version #{major}"
+    end
+  end
+
+  defp cache_key_for_compile(:inline, params, content, annotated) do
     compile_params =
       params
       |> Enum.reject(fn {_, v} -> is_nil(v) end)
       |> Enum.into(%{})
 
-    params_hash = :crypto.hash(:sha256, Jason.encode!(compile_params))
-    content_hash = :crypto.hash(:sha256, content)
-    {"inline", params_hash, content_hash}
+    params_hash = :erlang.phash2(compile_params)
+    content_hash = :erlang.phash2(content)
+    {"inline", params_hash, content_hash, annotated}
   end
 
-  defp cache_key_for_compile(prompt_key, params, content) do
+  defp cache_key_for_compile(prompt_key, params, content, annotated) do
     compile_params =
       params
       |> Enum.reject(fn {_, v} -> is_nil(v) end)
       |> Enum.into(%{})
 
     # Content hash implicitly covers @version changes
-    content_hash = :crypto.hash(:sha256, content)
-    params_hash = :crypto.hash(:sha256, Jason.encode!(compile_params))
-    {to_string(prompt_key), params_hash, content_hash}
+    content_hash = :erlang.phash2(content)
+    params_hash = :erlang.phash2(compile_params)
+    {to_string(prompt_key), params_hash, content_hash, annotated}
   end
 
   defp count_tokens(text) do
@@ -1082,19 +1397,11 @@ defmodule DotPrompt do
   end
 
   defp apply_defaults(params, declarations) do
-    Enum.reduce(declarations, params, fn {name, spec}, acc ->
-      if Map.has_key?(spec, :default) and spec.default != nil do
-        clean_name = String.trim_leading(name, "@")
-        atom_name = String.to_atom(clean_name)
-
-        if Map.has_key?(acc, atom_name) do
-          acc
-        else
-          Map.put(acc, atom_name, spec.default)
-        end
-      else
-        acc
-      end
+    declarations
+    |> Enum.filter(fn {_name, spec} -> Map.has_key?(spec, :default) and spec.default != nil end)
+    |> Enum.reduce(params, fn {name, spec}, acc ->
+      clean_name = name |> String.trim_leading("@") |> String.to_atom()
+      Map.put_new(acc, clean_name, spec.default)
     end)
   end
 
@@ -1125,22 +1432,11 @@ defmodule DotPrompt do
           expected_type = Map.get(field_spec, :type, "string")
 
           field_errors =
-            cond do
-              required and not Map.has_key?(response, field) ->
-                ["Missing required field: #{field}"]
-
-              Map.has_key?(response, field) ->
-                actual_value = Map.get(response, field)
-                actual_type = infer_type(actual_value)
-
-                if not type_matches?(expected_type, actual_type) do
-                  ["Field #{field} has type #{actual_type}, expected #{expected_type}"]
-                else
-                  []
-                end
-
-              true ->
-                []
+            with :ok <- check_required_field(required, field, response),
+                 :ok <- check_field_type(field, expected_type, response) do
+              []
+            else
+              {:error, msg} -> [msg]
             end
 
           acc ++ field_errors
@@ -1157,6 +1453,29 @@ defmodule DotPrompt do
     case final_errors do
       [] -> :ok
       errors -> {:error, Enum.join(errors, "; ")}
+    end
+  end
+
+  defp check_required_field(true, field, response) do
+    if Map.has_key?(response, field), do: :ok, else: {:error, "Missing required field: #{field}"}
+  end
+
+  defp check_required_field(false, _field, _response), do: :ok
+
+  defp check_field_type(_field, _expected_type, response) when response == %{}, do: :ok
+
+  defp check_field_type(field, expected_type, response) do
+    if Map.has_key?(response, field) do
+      actual_value = Map.get(response, field)
+      actual_type = infer_type(actual_value)
+
+      if type_matches?(expected_type, actual_type) do
+        :ok
+      else
+        {:error, "Field #{field} has type #{actual_type}, expected #{expected_type}"}
+      end
+    else
+      :ok
     end
   end
 

@@ -68,9 +68,10 @@ defmodule DotPrompt.Compiler.FragmentExpander.CollectionTest do
       assert {:ok, text, _, count} = Collection.expand("{skills}", %{}, 0, %{}, 0, rules)
 
       assert count == 3
-      assert text =~ "Anchoring Content"
-      assert text =~ "Meta Model Content"
-      assert text =~ "Milton Model Content"
+      text_str = IO.iodata_to_binary(text)
+      assert text_str =~ "Anchoring Content"
+      assert text_str =~ "Meta Model Content"
+      assert text_str =~ "Milton Model Content"
     end
 
     test "matches specific fragments with match: @var" do
@@ -79,9 +80,10 @@ defmodule DotPrompt.Compiler.FragmentExpander.CollectionTest do
       assert {:ok, text, _, count} = Collection.expand("{skills}", params, 0, %{}, 0, rules)
 
       assert count == 2
-      assert text =~ "Anchoring Content"
-      assert text =~ "Meta Model Content"
-      refute text =~ "Milton Model Content"
+      text_str = IO.iodata_to_binary(text)
+      assert text_str =~ "Anchoring Content"
+      assert text_str =~ "Meta Model Content"
+      refute text_str =~ "Milton Model Content"
     end
 
     test "matches with regex using matchRe" do
@@ -89,9 +91,10 @@ defmodule DotPrompt.Compiler.FragmentExpander.CollectionTest do
       assert {:ok, text, _, count} = Collection.expand("{skills}", %{}, 0, %{}, 0, rules)
 
       assert count == 2
-      assert text =~ "Meta Model Content"
-      assert text =~ "Milton Model Content"
-      refute text =~ "Anchoring Content"
+      text_str = IO.iodata_to_binary(text)
+      assert text_str =~ "Meta Model Content"
+      assert text_str =~ "Milton Model Content"
+      refute text_str =~ "Anchoring Content"
     end
 
     test "respects limit and order" do
@@ -99,10 +102,75 @@ defmodule DotPrompt.Compiler.FragmentExpander.CollectionTest do
       assert {:ok, text, _, count} = Collection.expand("{skills}", %{}, 0, %{}, 0, rules)
 
       assert count == 1
+      text_str = IO.iodata_to_binary(text)
       # descending alphabetic: milton, meta, anchoring -> first is milton
-      assert text =~ "Milton Model Content"
-      refute text =~ "Meta Model Content"
-      refute text =~ "Anchoring Content"
+      assert text_str =~ "Milton Model Content"
+      refute text_str =~ "Meta Model Content"
+      refute text_str =~ "Anchoring Content"
+    end
+
+    test "returns error when collection directory does not exist (missing_index)" do
+      # The no_index fixture directory exists but has a prompt file that compiles
+      # To trigger collection_not_found error, we need a non-existent directory
+      rules = %{match: "all"}
+      result = Collection.expand("{nonexistent_collection}", %{}, 0, %{}, 0, rules)
+
+      # Should return an error indicating the collection directory is not found
+      assert {:error, error_msg} = result
+      assert error_msg =~ "collection_not_found"
+      assert error_msg =~ "nonexistent_collection"
+    end
+
+    test "returns ok with none header when no fragments match the given criteria (collection_no_match)" do
+      # Use a match pattern that doesn't match any existing fragments in the skills collection
+      rules = %{match: "NonExistentPatternThatMatchesNothing"}
+      result = Collection.expand("{skills}", %{}, 0, %{}, 0, rules)
+
+      # The collection exists and has index, but no fragments match the criteria
+      # This returns ok with "(none)" header text and count = 1 (the none item)
+      assert {:ok, text, _, count} = result
+      text_str = IO.iodata_to_binary(text)
+      assert text_str =~ "(none)"
+      assert count == 1
+    end
+
+    test "matches with regex using matchRe with @variable interpolation" do
+      # Test that @pattern variable is interpolated correctly
+      rules = %{matchRe: "@pattern"}
+      params = %{pattern: "M.*"}
+      assert {:ok, text, _, count} = Collection.expand("{skills}", params, 0, %{}, 0, rules)
+
+      assert count == 2
+      text_str = IO.iodata_to_binary(text)
+      assert text_str =~ "Meta Model Content"
+      assert text_str =~ "Milton Model Content"
+      refute text_str =~ "Anchoring Content"
+    end
+
+    test "matches with regex using matchRe with @variable containing complex pattern" do
+      # Test that a more complex regex pattern works via variable interpolation
+      rules = %{matchRe: "@pattern"}
+      params = %{pattern: "[A-M].*"}
+      assert {:ok, text, _, count} = Collection.expand("{skills}", params, 0, %{}, 0, rules)
+
+      # [A-M] should match Anchoring (A), Meta Model (M), and Milton Model (M)
+      assert count == 3
+      text_str = IO.iodata_to_binary(text)
+      assert text_str =~ "Meta Model Content"
+      assert text_str =~ "Anchoring Content"
+      assert text_str =~ "Milton Model Content"
+    end
+
+    test "interpolates @variable in matchRe pattern correctly" do
+      # Verify that @pattern gets replaced with the actual pattern value
+      rules = %{matchRe: "@filter"}
+      params = %{filter: "Milton.*"}
+      assert {:ok, text, _, count} = Collection.expand("{skills}", params, 0, %{}, 0, rules)
+
+      assert count == 1
+      text_str = IO.iodata_to_binary(text)
+      assert text_str =~ "Milton Model Content"
+      refute text_str =~ "Meta Model Content"
     end
   end
 end

@@ -1,0 +1,132 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+
+const staticFragmentsCode = `fragments:
+  {skill_context}: static from: skills
+    match: @skill_names
+  {tone_guide}: static from: prompts/tone
+    match: @tone`;
+
+const dynamicFragmentsCode = `fragments:
+  {{user_context}}: dynamic`;
+
+const singleValueCode = `{skill}: static from: skills
+  match: @skill`;
+
+const multipleValuesCode = `{skills}: static from: skills
+  match: @skill_names`;
+
+const regexPatternCode = `{pattern}: static from: skills
+  matchRe: @skill_pattern`;
+
+const allFilesCode = `{all}: static from: skills
+  match: all
+  limit: 10
+  order: ascending`;
+
+const usingFragmentsCode = `init do
+  params:
+    @skills: list[str]
+
+  fragments:
+    {context}: static from: skills
+      match: @skills
+
+end init
+
+{context}
+
+Now answer the user's question.`;
+
+const folderStructureCode = `priv/prompts/
+├── main.prompt
+├── skills/
+│   ├── _index.prompt      # Collection manifest
+│   ├── milton_model.prompt
+│   └── meta_model.prompt
+└── tone/
+    ├── _index.prompt
+    ├── formal.prompt
+    └── casual.prompt`;
+
+const collectionManifestCode = `init do
+  @version: 1.0
+  @major: 1
+
+  def:
+    type: collection
+    description: Communication skills
+
+end init`;
+---
+
+<DocsLayout 
+  title="Fragments" 
+  activeSlug="/docs/fragments"
+  description="Static and dynamic fragments in .prompt"
+>
+  <h1>Fragments</h1>
+  <p>
+    Fragments let you compose prompts from reusable pieces. Break common content into fragments and reference them throughout your prompts.
+  </p>
+
+  <h2>Fragment Types</h2>
+
+  <h3>Static Fragments <code>{`{name}`}</code></h3>
+  <p>
+    Cached at compile time. Loaded from files or folders. Perfect for skills, tone guides, and other reusable content.
+  </p>
+
+  <pre><code>{staticFragmentsCode}</code></pre>
+
+  <h3>Dynamic Fragments <code>{`{{name}}`}</code></h3>
+  <p>
+    Fetched fresh each request. Useful for user-specific context.
+  </p>
+
+  <pre><code>{dynamicFragmentsCode}</code></pre>
+
+  <h2>Match Patterns</h2>
+
+  <h3>Single Value (enum)</h3>
+  <pre><code>{singleValueCode}</code></pre>
+
+  <h3>Multiple Values (list)</h3>
+  <pre><code>{multipleValuesCode}</code></pre>
+
+  <h3>Regex Pattern</h3>
+  <pre><code>{regexPatternCode}</code></pre>
+
+  <h3>All Files in Folder</h3>
+  <pre><code>{allFilesCode}</code></pre>
+
+  <h2>Using Fragments</h2>
+  <p>
+    Reference fragments in your prompt:
+  </p>
+
+  <pre><code>{usingFragmentsCode}</code></pre>
+
+  <h2>Folder Structure</h2>
+  <pre><code>{folderStructureCode}</code></pre>
+
+  <h3>Collection Manifest</h3>
+  <p>
+    Each folder can have an <code>_index.prompt</code> that defines metadata:
+  </p>
+
+  <pre><code>{collectionManifestCode}</code></pre>
+
+  <h2>Caching</h2>
+  <ul>
+    <li><strong>Static fragments</strong> — Cached at compile time by path</li>
+    <li><strong>Dynamic fragments</strong> — Fetched fresh each request</li>
+    <li><strong>Collections</strong> — Cached and composited</li>
+  </ul>
+
+  <h2>Next Steps</h2>
+  <ul>
+    <li><a href="/docs/response-contracts">Response Contracts</a> — Define output schemas</li>
+    <li><a href="/docs/versioning">Versioning</a> — Manage fragment versions</li>
+  </ul>
+</DocsLayout>

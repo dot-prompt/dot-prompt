@@ -54,7 +54,7 @@ defmodule DotPromptServer.RuntimeStorage do
   @doc """
   Gets all fixtures for all parameters.
   """
-  def get_all_fixtures() do
+  def get_all_fixtures do
     GenServer.call(@name, :get_all_fixtures)
   end
 
@@ -116,44 +116,52 @@ defmodule DotPromptServer.RuntimeStorage do
   @impl true
   def handle_call({:get_fixtures, param_name}, _from, state) do
     raw_fixtures = Map.get(state.fixtures, to_string(param_name), [])
-    formatted = Enum.map(raw_fixtures, fn f -> {f["label"] || f[:label], f["value"] || f[:value]} end)
+
+    formatted =
+      Enum.map(raw_fixtures, fn f -> {f["label"] || f[:label], f["value"] || f[:value]} end)
+
     {:reply, formatted, state}
   end
 
   @impl true
   def handle_call(:get_all_fixtures, _from, state) do
     # Format all fixtures to {label, value} for DevUI compatibility
-    formatted = 
+    formatted =
       state.fixtures
       |> Enum.into(%{}, fn {p, fs} ->
         {p, Enum.map(fs, fn f -> {f["label"] || f[:label], f["value"] || f[:value]} end)}
       end)
+
     {:reply, formatted, state}
   end
 
   # Helper Functions
 
-  defp storage_file() do
+  defp storage_file do
     Path.join(File.cwd!(), ".runtime_storage.json")
   end
 
-  defp load_state() do
+  defp load_state do
     path = storage_file()
+
     if File.exists?(path) do
       case File.read(path) do
         {:ok, content} ->
           case Jason.decode(content) do
             {:ok, data} ->
               Logger.info("[RuntimeStorage] Loaded state from #{path}")
+
               %{
                 global_params: Map.get(data, "global_params", %{}),
                 file_params: Map.get(data, "file_params", %{}),
                 fixtures: Map.get(data, "fixtures", %{})
               }
+
             _ ->
-              Logger.warn("[RuntimeStorage] Failed to decode JSON, using default state")
+              Logger.warning("[RuntimeStorage] Failed to decode JSON, using default state")
               default_state()
           end
+
         _ ->
           default_state()
       end
@@ -165,15 +173,19 @@ defmodule DotPromptServer.RuntimeStorage do
 
   defp save_state(state) do
     path = storage_file()
+
     case Jason.encode(state) do
       {:ok, json} ->
         File.write(path, json)
+        {:ok, state}
+
       {:error, reason} ->
-        Logger.error("[RuntimeStorage] Failed to encode state: #{inspect(reason)}")
+        Logger.error("[RuntimeStorage] Failed to save state: #{inspect(reason)}")
+        {:error, reason}
     end
   end
 
-  defp default_state() do
+  defp default_state do
     %{global_params: %{}, file_params: %{}, fixtures: %{}}
   end
 end

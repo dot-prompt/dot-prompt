@@ -1,0 +1,23 @@
+# Elixir/Phoenix
+/_build
+/deps
+/*.ez
+/erl_crash.dump
+/mix.lock (only if we want to refresh it, but usually better to keep for reproducible builds, though we copy it explicitly anyway)
+
+# Assets
+/apps/dot_prompt_server/assets/node_modules
+/apps/dot_prompt_server/priv/static (unless we want to include pre-built assets, but we build them in Docker)
+
+# Environment and Secrets
+/.env
+/*.env
+/config/*.secret.exs
+
+# Version Control
+/.git
+/.gitignore
+
+# IDEs
+/.vscode
+/.elixir_ls

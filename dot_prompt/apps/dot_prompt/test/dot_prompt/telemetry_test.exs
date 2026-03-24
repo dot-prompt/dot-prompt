@@ -77,7 +77,8 @@ defmodule DotPrompt.TelemetryTest do
       try do
         Telemetry.start_render("test_prompt", %{user: "Alice"})
 
-        assert_receive {:telemetry_event, [:dot_prompt, :render, :start], measurements, metadata}, 100
+        assert_receive {:telemetry_event, [:dot_prompt, :render, :start], measurements, metadata},
+                       100
 
         # Verify measurements contain system_time
         assert is_map(measurements)
@@ -118,7 +119,9 @@ defmodule DotPrompt.TelemetryTest do
           measurements
         )
 
-        assert_receive {:telemetry_event, [:dot_prompt, :render, :stop], result_measurements, metadata}, 100
+        assert_receive {:telemetry_event, [:dot_prompt, :render, :stop], result_measurements,
+                        metadata},
+                       100
 
         # Verify measurements contain duration and compiled_tokens
         assert result_measurements[:duration] == 42
@@ -155,7 +158,9 @@ defmodule DotPrompt.TelemetryTest do
           measurements
         )
 
-        assert_receive {:telemetry_event, [:dot_prompt, :render, :stop], result_measurements, metadata}, 100
+        assert_receive {:telemetry_event, [:dot_prompt, :render, :stop], result_measurements,
+                        metadata},
+                       100
 
         assert result_measurements[:duration] == 10
         assert result_measurements[:compiled_tokens] == 0
@@ -191,7 +196,9 @@ defmodule DotPrompt.TelemetryTest do
           measurements
         )
 
-        assert_receive {:telemetry_event, [:dot_prompt, :render, :stop], _result_measurements, metadata}, 100
+        assert_receive {:telemetry_event, [:dot_prompt, :render, :stop], _result_measurements,
+                        metadata},
+                       100
 
         assert metadata[:cache_hit] == true
         refute Map.has_key?(metadata, :vary_selections)
@@ -224,16 +231,22 @@ defmodule DotPrompt.TelemetryTest do
 
       try do
         # Call compile which internally calls compile_to_iodata which emits telemetry
-        {:ok, _result, _selections, _vars, _cached, _hit, _warnings} =
+        {:ok, %DotPrompt.Result{}} =
           DotPrompt.compile("demo", %{user: "Alice"})
 
         # Verify start event was emitted
-        assert_receive {:start_event, [:dot_prompt, :render, :start], _measurements, start_metadata}, 100
+        assert_receive {:start_event, [:dot_prompt, :render, :start], _measurements,
+                        start_metadata},
+                       100
+
         assert start_metadata[:prompt] == "demo"
         assert start_metadata[:params] == %{user: "Alice"}
 
         # Verify stop event was emitted
-        assert_receive {:stop_event, [:dot_prompt, :render, :stop], stop_measurements, stop_metadata}, 100
+        assert_receive {:stop_event, [:dot_prompt, :render, :stop], stop_measurements,
+                        stop_metadata},
+                       100
+
         assert stop_measurements[:compiled_tokens] > 0
         assert stop_metadata[:prompt] == "demo"
         assert stop_metadata[:params] == %{user: "Alice"}
@@ -265,15 +278,21 @@ defmodule DotPrompt.TelemetryTest do
       :telemetry.attach(stop_id, [:dot_prompt, :render, :stop], stop_handler, [])
 
       try do
-        {:ok, _iodata, _selections, _vars, _cached, _hit, _warnings} =
+        {:ok, _iodata, _selections, _vars, _cached, _hit, _warnings, _contract, _major, _version} =
           DotPrompt.compile_to_iodata("test", %{name: "World"}, [])
 
         # Verify both start and stop events were emitted
-        assert_receive {:start_event, [:dot_prompt, :render, :start], _measurements, start_metadata}, 100
+        assert_receive {:start_event, [:dot_prompt, :render, :start], _measurements,
+                        start_metadata},
+                       100
+
         assert start_metadata[:prompt] == "test"
         assert start_metadata[:params] == %{name: "World"}
 
-        assert_receive {:stop_event, [:dot_prompt, :render, :stop], stop_measurements, stop_metadata}, 100
+        assert_receive {:stop_event, [:dot_prompt, :render, :stop], stop_measurements,
+                        stop_metadata},
+                       100
+
         assert is_integer(stop_measurements[:duration])
         assert is_integer(stop_measurements[:compiled_tokens])
         assert stop_metadata[:prompt] == "test"
@@ -305,18 +324,24 @@ defmodule DotPrompt.TelemetryTest do
       :telemetry.attach(stop_id, [:dot_prompt, :render, :stop], stop_handler, [])
 
       try do
-        {:ok, result, _selections, _tokens, _cache_hit} =
+        {:ok, %DotPrompt.Result{prompt: result}} =
           DotPrompt.render("render_demo", %{user: "Alice"}, %{user: "Alice"})
 
         assert result =~ "Alice"
 
         # Verify start event was emitted
-        assert_receive {:start_event, [:dot_prompt, :render, :start], _measurements, start_metadata}, 100
+        assert_receive {:start_event, [:dot_prompt, :render, :start], _measurements,
+                        start_metadata},
+                       100
+
         assert start_metadata[:prompt] == "render_demo"
         assert start_metadata[:params] == %{user: "Alice"}
 
         # Verify stop event was emitted
-        assert_receive {:stop_event, [:dot_prompt, :render, :stop], stop_measurements, stop_metadata}, 100
+        assert_receive {:stop_event, [:dot_prompt, :render, :stop], stop_measurements,
+                        stop_metadata},
+                       100
+
         assert stop_measurements[:compiled_tokens] > 0
         assert stop_metadata[:prompt] == "render_demo"
       after

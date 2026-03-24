@@ -6,16 +6,19 @@ defmodule DotPromptServerWeb.RenderController do
       []
       |> maybe_put(:seed, body["seed"])
       |> maybe_put(:seeds, body["seeds"])
+      |> maybe_put(:major, body["major"])
 
-    with {:ok, result, vary_selections, injected_tokens, cache_hit} <-
-           DotPrompt.render(prompt, params, runtime, opts) do
-      json(conn, %{
-        prompt: result,
-        cache_hit: cache_hit,
-        vary_selections: vary_selections,
-        injected_tokens: injected_tokens
-      })
-    else
+    case DotPrompt.render(prompt, params, runtime, opts) do
+      {:ok, %DotPrompt.Result{} = result} ->
+        json(conn, %{
+          prompt: result.prompt,
+          cache_hit: result.cache_hit,
+          compiled_tokens: result.compiled_tokens,
+          vary_selections: result.vary_selections,
+          injected_tokens: result.injected_tokens,
+          response_contract: result.response_contract
+        })
+
       {:error, details} ->
         conn
         |> put_status(:unprocessable_entity)

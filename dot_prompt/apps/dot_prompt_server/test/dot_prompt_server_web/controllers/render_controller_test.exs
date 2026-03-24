@@ -30,6 +30,63 @@ defmodule DotPromptServerWeb.RenderControllerTest do
     assert response["cache_hit"] == false
   end
 
+  test "response includes compiled_tokens", %{conn: conn} do
+    content = "Hello @name, welcome to the system!"
+
+    body = %{
+      "prompt" => content,
+      "params" => %{},
+      "runtime" => %{"name" => "World"}
+    }
+
+    conn = post(conn, ~p"/api/render", body)
+    response = json_response(conn, 200)
+    assert %{"compiled_tokens" => tokens} = response
+    assert is_integer(tokens)
+    assert tokens > 0
+  end
+
+  test "response includes injected_tokens", %{conn: conn} do
+    content = "Hello @name, your score is @score!"
+
+    body = %{
+      "prompt" => content,
+      "params" => %{},
+      "runtime" => %{"name" => "Alice", "score" => "100"}
+    }
+
+    conn = post(conn, ~p"/api/render", body)
+    response = json_response(conn, 200)
+    assert %{"injected_tokens" => tokens} = response
+    assert is_integer(tokens)
+    assert tokens > 0
+  end
+
+  test "response includes vary_selections", %{conn: conn} do
+    content = """
+    init do
+      params:
+        @style: enum[a, b]
+    end init
+    vary @style do
+    a: Style A
+    b: Style B
+    end @style
+    """
+
+    body = %{
+      "prompt" => content,
+      "params" => %{},
+      "runtime" => %{},
+      "seed" => 42
+    }
+
+    conn = post(conn, ~p"/api/render", body)
+    response = json_response(conn, 200)
+    assert %{"vary_selections" => selections} = response
+    assert is_map(selections) or selections == %{}
+  end
+
   test "POST /api/render with seed", %{conn: conn} do
     content = """
     init do
@@ -69,10 +126,16 @@ defmodule DotPromptServerWeb.RenderControllerTest do
       """
 
       # Empty string param - renders with empty value
-      conn = post(conn, ~p"/api/render", %{"prompt" => content, "params" => %{"name" => ""}, "runtime" => %{}})
+      conn =
+        post(conn, ~p"/api/render", %{
+          "prompt" => content,
+          "params" => %{"name" => ""},
+          "runtime" => %{}
+        })
+
       response = json_response(conn, 200)
       # Returns 200 with the template rendered
-      assert response["prompt"] == "Hello !"
+      assert String.trim(response["prompt"]) == "Hello !"
     end
 
     test "returns 422 for invalid param type", %{conn: conn} do
@@ -84,13 +147,25 @@ defmodule DotPromptServerWeb.RenderControllerTest do
       Age: @age
       """
 
-      conn = post(conn, ~p"/api/render", %{"prompt" => content, "params" => %{"age" => "not_a_number"}, "runtime" => %{}})
+      conn =
+        post(conn, ~p"/api/render", %{
+          "prompt" => content,
+          "params" => %{"age" => "not_a_number"},
+          "runtime" => %{}
+        })
+
       assert json_response(conn, 422)["error"]
     end
 
     test "returns 422 for invalid prompt syntax", %{conn: conn} do
       # Parser accepts this syntax, returns 200 with template as-is
-      conn = post(conn, ~p"/api/render", %{"prompt" => "invalid {{ unclosed", "params" => %{}, "runtime" => %{}})
+      conn =
+        post(conn, ~p"/api/render", %{
+          "prompt" => "invalid {{ unclosed",
+          "params" => %{},
+          "runtime" => %{}
+        })
+
       response = json_response(conn, 200)
       assert response["prompt"] =~ "invalid"
     end
@@ -104,7 +179,13 @@ defmodule DotPromptServerWeb.RenderControllerTest do
       Level: @level
       """
 
-      conn = post(conn, ~p"/api/render", %{"prompt" => content, "params" => %{"level" => "expert"}, "runtime" => %{}})
+      conn =
+        post(conn, ~p"/api/render", %{
+          "prompt" => content,
+          "params" => %{"level" => "expert"},
+          "runtime" => %{}
+        })
+
       assert json_response(conn, 422)["error"]
     end
   end

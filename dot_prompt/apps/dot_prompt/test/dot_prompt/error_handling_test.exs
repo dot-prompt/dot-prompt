@@ -90,8 +90,8 @@ defmodule DotPrompt.ErrorHandlingTest do
       Step @step
       """
 
-      assert {:ok, _, _, _, _, _, _} = DotPrompt.compile(content, %{step: 1})
-      assert {:ok, _, _, _, _, _, _} = DotPrompt.compile(content, %{step: 5})
+      assert {:ok, %DotPrompt.Result{}} = DotPrompt.compile(content, %{step: 1})
+      assert {:ok, %DotPrompt.Result{}} = DotPrompt.compile(content, %{step: 5})
     end
   end
 
@@ -123,7 +123,7 @@ defmodule DotPrompt.ErrorHandlingTest do
       Using @variation
       """
 
-      assert {:ok, result, _, _, _, _, _} =
+      assert {:ok, %{prompt: result}} =
                DotPrompt.compile(content, %{variation: "recognition"})
 
       assert result =~ "recognition"
@@ -157,7 +157,7 @@ defmodule DotPrompt.ErrorHandlingTest do
       Teaching @skills
       """
 
-      assert {:ok, result, _, _, _, _, _} =
+      assert {:ok, %{prompt: result}} =
                DotPrompt.compile(content, %{skills: ["Milton Model", "Meta Model"]})
 
       assert result =~ "Milton Model"
@@ -191,7 +191,7 @@ defmodule DotPrompt.ErrorHandlingTest do
       Hello @optional_default_test_var
       """
 
-      assert {:ok, result, _, _, _, _, _} = DotPrompt.compile(content, %{})
+      assert {:ok, %{prompt: result}} = DotPrompt.compile(content, %{})
       assert result =~ "default_value"
     end
   end
@@ -260,7 +260,7 @@ defmodule DotPrompt.ErrorHandlingTest do
       end @a
       """
 
-      assert {:ok, _, _, _, _, _, _} = DotPrompt.compile(content, %{a: true})
+      assert {:ok, %DotPrompt.Result{}} = DotPrompt.compile(content, %{a: true})
     end
   end
 
@@ -308,7 +308,7 @@ defmodule DotPrompt.ErrorHandlingTest do
       end @a
       """
 
-      assert {:ok, result, _, _, _, _, _} =
+      assert {:ok, %{prompt: result}} =
                DotPrompt.compile(content, %{a: true, b: true, c: true})
 
       assert result =~ "valid depth"
@@ -365,6 +365,96 @@ defmodule DotPrompt.ErrorHandlingTest do
                DotPrompt.compile(content, %{})
 
       assert message =~ "trailing slashes not allowed"
+    end
+  end
+
+  describe "collection_not_found (missing_index)" do
+    test "error when accessing non-existent collection directory as fragment" do
+      # First set up a valid collection directory
+      prompts_dir = Application.get_env(:dot_prompt, :prompts_dir)
+      test_collection_dir = Path.join(prompts_dir, "valid_collection")
+
+      File.mkdir_p!(test_collection_dir)
+
+      File.write!(Path.join(test_collection_dir, "_index.prompt"), """
+      init do
+        @version: 1
+        def:
+          mode: collection
+      end init
+      """)
+
+      on_exit(fn ->
+        File.rm_rf!(test_collection_dir)
+      end)
+
+      # Now try to reference a collection that doesn't exist
+      content = """
+      init do
+        fragments:
+          {missing}: collection from: completely_different_dir
+      end init
+      {missing}
+      """
+
+      result = DotPrompt.compile(content, %{})
+
+      # The collection directory "completely_different_dir" doesn't exist
+      # Error is returned as a map with :error and :message keys
+      assert {:error, error_msg} = result
+      assert is_map(error_msg)
+      assert error_msg.message =~ "collection_not_found"
+    end
+  end
+
+  describe "collection_no_match" do
+    test "returns ok with none header when no fragments match criteria" do
+      # First set up a collection with matching fragments
+      prompts_dir = Application.get_env(:dot_prompt, :prompts_dir)
+      test_collection_dir = Path.join(prompts_dir, "test_no_match_collection")
+
+      # Create a collection with fragments that have specific match values
+      File.mkdir_p!(test_collection_dir)
+
+      File.write!(Path.join(test_collection_dir, "_index.prompt"), """
+      init do
+        @version: 1
+        def:
+          mode: collection
+      end init
+      """)
+
+      File.write!(Path.join(test_collection_dir, "fragment1.prompt"), """
+      init do
+        @version: 1
+        def:
+          mode: fragment
+          match: ActualPattern
+      end init
+      Content1
+      """)
+
+      on_exit(fn ->
+        File.rm_rf!(test_collection_dir)
+      end)
+
+      # Now try to compile with a non-matching pattern
+      # Use the correct syntax with indented match option
+      content = """
+      init do
+        fragments:
+          {test_no_match_collection}: static from: test_no_match_collection
+            match: NonExistentPattern
+      end init
+      {test_no_match_collection}
+      """
+
+      result = DotPrompt.compile(content, %{})
+
+      # This should return ok with "(none)" header (not an error)
+      assert {:ok, %DotPrompt.Result{prompt: text}} = result
+      text_str = IO.iodata_to_binary(text)
+      assert text_str =~ "(none)"
     end
   end
 end

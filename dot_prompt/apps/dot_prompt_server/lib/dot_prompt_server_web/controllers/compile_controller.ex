@@ -5,14 +5,17 @@ defmodule DotPromptServerWeb.CompileController do
     opts =
       []
       |> maybe_put(:seed, body["seed"])
+      |> maybe_put(:major, body["major"])
 
     case DotPrompt.compile(prompt, params, opts) do
-      {:ok, template, vary_selections, _used, _files, cache_hit, warnings} ->
+      {:ok, %DotPrompt.Result{} = result} ->
         json(conn, %{
-          template: template,
-          cache_hit: cache_hit,
-          vary_selections: vary_selections,
-          warnings: warnings
+          template: result.prompt,
+          cache_hit: result.cache_hit,
+          compiled_tokens: result.compiled_tokens,
+          vary_selections: result.vary_selections,
+          response_contract: result.response_contract,
+          warnings: result.metadata.warnings
         })
 
       {:error, details} ->
@@ -25,6 +28,13 @@ defmodule DotPromptServerWeb.CompileController do
       conn
       |> put_status(:unprocessable_entity)
       |> json(%{error: "compile_error", message: Exception.message(e)})
+  end
+
+  # Handle missing required params - return 422
+  def compile(conn, _params) do
+    conn
+    |> put_status(:unprocessable_entity)
+    |> json(%{error: "missing_required_params", message: "prompt and params are required"})
   end
 
   defp maybe_put(list, _key, nil), do: list

@@ -29,7 +29,7 @@ defmodule DotPromptTest do
   test "renders a basic prompt" do
     params = %{user_level: "beginner"}
     runtime = %{user_level: "beginner"}
-    assert {:ok, result, _, _, _} = DotPrompt.render("demo", params, runtime)
+    assert {:ok, %{prompt: result}} = DotPrompt.render("demo", params, runtime)
     assert result =~ "helpful tutor"
   end
 end

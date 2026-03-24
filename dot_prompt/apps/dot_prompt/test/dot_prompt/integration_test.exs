@@ -19,14 +19,14 @@ defmodule DotPrompt.IntegrationTest do
     """
 
     params = %{level_1: true, level_2: "a", level_3: true}
-    assert {:ok, result, _, _, _, _, _} = DotPrompt.compile(content, params)
+    assert {:ok, %{prompt: result}} = DotPrompt.compile(content, params)
     assert result =~ "Level 2A"
     assert result =~ "Level 3 True"
     refute result =~ "Level 2B"
     refute result =~ "Level 3 False"
 
     params = %{level_1: true, level_2: "a", level_3: false}
-    assert {:ok, result, _, _, _, _, _} = DotPrompt.compile(content, params)
+    assert {:ok, %{prompt: result}} = DotPrompt.compile(content, params)
     assert result =~ "Level 3 False"
   end
 
@@ -43,13 +43,13 @@ defmodule DotPrompt.IntegrationTest do
     end @score
     """
 
-    assert {:ok, res1, _, _, _, _, _} = DotPrompt.compile(content, %{score: 95})
+    assert {:ok, %DotPrompt.Result{prompt: res1}} = DotPrompt.compile(content, %{score: 95})
     assert res1 =~ "Grade: A"
-    assert {:ok, res2, _, _, _, _, _} = DotPrompt.compile(content, %{score: 80})
+    assert {:ok, %DotPrompt.Result{prompt: res2}} = DotPrompt.compile(content, %{score: 80})
     assert res2 =~ "Grade: B"
-    assert {:ok, res3, _, _, _, _, _} = DotPrompt.compile(content, %{score: 75})
+    assert {:ok, %DotPrompt.Result{prompt: res3}} = DotPrompt.compile(content, %{score: 75})
     assert res3 =~ "Grade: C"
-    assert {:ok, res4, _, _, _, _, _} = DotPrompt.compile(content, %{score: 60})
+    assert {:ok, %DotPrompt.Result{prompt: res4}} = DotPrompt.compile(content, %{score: 60})
     assert res4 =~ "Grade: D/F"
   end
 
@@ -73,7 +73,7 @@ defmodule DotPrompt.IntegrationTest do
     """
 
     params = %{persona: "tutor", expert: true, style: "challenge"}
-    assert {:ok, result, _, _, _, _, _} = DotPrompt.compile(content, params, seed: 1)
+    assert {:ok, %{prompt: result}} = DotPrompt.compile(content, params, seed: 1)
     assert result =~ "expert tutor"
     assert result =~ "Challenge the student."
     refute result =~ "assistant"
@@ -86,7 +86,7 @@ defmodule DotPrompt.IntegrationTest do
     """
 
     params = %{user_level: "advanced", user_id: 42}
-    assert {:ok, result, _, _, _, _, _} = DotPrompt.compile(content, params)
+    assert {:ok, %{prompt: result}} = DotPrompt.compile(content, params)
     assert result =~ "Your level is advanced"
     assert result =~ "Your ID is 42"
   end
@@ -98,7 +98,7 @@ defmodule DotPrompt.IntegrationTest do
     Outside Text
     """
 
-    assert {:ok, result, _, _, _, _, _} = DotPrompt.compile(content, %{empty: true})
+    assert {:ok, %{prompt: result}} = DotPrompt.compile(content, %{empty: true})
     assert result =~ "Outside Text"
 
     content = """
@@ -107,7 +107,7 @@ defmodule DotPrompt.IntegrationTest do
     Outside Text
     """
 
-    assert {:ok, result, _, _, _, _, _} = DotPrompt.compile(content, %{empty: "anything"})
+    assert {:ok, %{prompt: result}} = DotPrompt.compile(content, %{empty: "anything"})
     assert result =~ "Outside Text"
   end
 
@@ -121,7 +121,7 @@ defmodule DotPrompt.IntegrationTest do
       end @user_level
       """
 
-      assert {:ok, result, _, _, _, _, _} = DotPrompt.compile(content, %{user_level: "beginner"})
+      assert {:ok, %{prompt: result}} = DotPrompt.compile(content, %{user_level: "beginner"})
       assert result =~ "Welcome, new user!"
       refute result =~ "[[section:"
       refute result =~ "[[/section]]"
@@ -136,7 +136,7 @@ defmodule DotPrompt.IntegrationTest do
       end @user_level
       """
 
-      assert {:ok, result, _, _, _, _, _} =
+      assert {:ok, %{prompt: result}} =
                DotPrompt.compile(content, %{user_level: "beginner"}, annotated: true)
 
       assert result =~ "[[section:branch:"
@@ -149,7 +149,7 @@ defmodule DotPrompt.IntegrationTest do
       Always be kind to users.
       """
 
-      assert {:ok, result, _, _, _, _, _} = DotPrompt.compile(content, %{})
+      assert {:ok, %{prompt: result}} = DotPrompt.compile(content, %{})
       refute result =~ "[[section:"
       refute result =~ "[[/section]]"
     end
@@ -160,7 +160,7 @@ defmodule DotPrompt.IntegrationTest do
       Always be kind to users.
       """
 
-      assert {:ok, result, _, _, _, _, _} = DotPrompt.compile(content, %{}, annotated: true)
+      assert {:ok, %{prompt: result}} = DotPrompt.compile(content, %{}, annotated: true)
       refute result =~ "[[section:"
       refute result =~ "[[/section]]"
     end
@@ -174,7 +174,7 @@ defmodule DotPrompt.IntegrationTest do
       end @mode
       """
 
-      assert {:ok, result, _, _, _, _, _} =
+      assert {:ok, %{prompt: result}} =
                DotPrompt.compile(content, %{mode: "simple"}, annotated: true)
 
       assert result =~ "[[section:branch:"
@@ -188,7 +188,7 @@ defmodule DotPrompt.IntegrationTest do
       end @persona
       """
 
-      assert {:ok, result, _, _, _, _, _} =
+      assert {:ok, %{prompt: result}} =
                DotPrompt.compile(content, %{persona: "tutor"}, annotated: true)
 
       assert result =~ "[[section:case:"
@@ -202,7 +202,7 @@ defmodule DotPrompt.IntegrationTest do
       end @style
       """
 
-      assert {:ok, result, _, _, _, _, _} =
+      assert {:ok, %{prompt: result}} =
                DotPrompt.compile(content, %{style: "formal"}, annotated: true)
 
       assert result =~ "[[section:vary:"

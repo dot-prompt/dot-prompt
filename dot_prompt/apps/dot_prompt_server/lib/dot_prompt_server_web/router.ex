@@ -20,6 +20,7 @@ defmodule DotPromptServerWeb.Router do
     get("/prompts", PromptsController, :index)
     get("/collections", PromptsController, :collections)
     get("/schema/:prompt", SchemaController, :show)
+    get("/schema/:prompt/:major", SchemaController, :show)
     post("/compile", CompileController, :compile)
     post("/render", RenderController, :render)
     post("/inject", InjectController, :inject)

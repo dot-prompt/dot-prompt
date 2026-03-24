@@ -95,8 +95,8 @@ defmodule DotPrompt.Parser.Lexer do
         trimmed == "vary do" ->
           [%Token{type: :vary_start, value: nil, line: line_no}]
 
-        # Fragments in body
-        Regex.match?(~r/^\{[\w\-\.\/]+\}$/, trimmed) ->
+        # Fragments in body (Exclude reserved {response_contract})
+        Regex.match?(~r/^\{[\w\-\.\/]+\}$/, trimmed) and trimmed != "{response_contract}" ->
           [%Token{type: :fragment_static, value: trimmed, line: line_no}]
 
         Regex.match?(~r/^\{\{[\w\-\.\/]+\}\}$/, trimmed) ->

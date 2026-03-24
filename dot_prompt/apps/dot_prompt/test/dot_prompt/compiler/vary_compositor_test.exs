@@ -36,7 +36,7 @@ defmodule DotPrompt.Compiler.VaryCompositorTest do
       }
 
       {_result, selections} = VaryCompositor.resolve_full(skeleton, vary_map, 0)
-      assert selections == %{"intro_style" => "formal"}
+      assert selections == %{"intro_style" => %{id: "formal", text: "Formal greeting"}}
     end
 
     test "same seed produces same result" do
@@ -87,7 +87,7 @@ defmodule DotPrompt.Compiler.VaryCompositorTest do
       end @style
       """
 
-      assert {:ok, result, _, _, _, _, _} =
+      assert {:ok, %{prompt: result}} =
                DotPrompt.compile(content, %{style: "formal"}, seed: 1)
 
       assert is_binary(result)
@@ -112,7 +112,7 @@ defmodule DotPrompt.Compiler.VaryCompositorTest do
       end @style
       """
 
-      assert {:ok, result, _, _, _, _, _} =
+      assert {:ok, %{prompt: result}} =
                DotPrompt.compile(content, %{style: "a", depth: 1}, seed: 1)
 
       assert is_binary(result)
@@ -130,7 +130,7 @@ defmodule DotPrompt.Compiler.VaryCompositorTest do
       end @tone
       """
 
-      assert {:ok, result, _, _, _, _, _} =
+      assert {:ok, %{prompt: result}} =
                DotPrompt.compile(content, %{tone: "encouraging"}, seed: 1)
 
       assert result =~ "great" or result =~ "harder"
@@ -157,7 +157,7 @@ defmodule DotPrompt.Compiler.VaryCompositorTest do
       end @style
       """
 
-      assert {:ok, result, _, _, _, _, _} =
+      assert {:ok, %{prompt: result}} =
                DotPrompt.compile(content, %{style: "formal", expert: true}, seed: 1)
 
       assert is_binary(result)
@@ -177,10 +177,10 @@ defmodule DotPrompt.Compiler.VaryCompositorTest do
       """
 
       DotPrompt.invalidate_all_cache()
-      {:ok, r1, _, _, _, _, _} = DotPrompt.compile(content, %{}, seed: 42)
+      {:ok, %DotPrompt.Result{prompt: r1}} = DotPrompt.compile(content, %{}, seed: 42)
 
       DotPrompt.invalidate_all_cache()
-      {:ok, r2, _, _, _, _, _} = DotPrompt.compile(content, %{}, seed: 42)
+      {:ok, %DotPrompt.Result{prompt: r2}} = DotPrompt.compile(content, %{}, seed: 42)
 
       assert r1 == r2
     end

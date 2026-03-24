@@ -187,36 +187,9 @@ Three independent cache layers. The structural skeleton is cached by compile-tim
 
 ---
 
-## Installation
+## Runs via container
 
-### Elixir (native — zero latency)
-
-```elixir
-# mix.exs
-{:dot_prompt, "~> 1.0"}
-```
-
-```elixir
-result = DotPrompt.render("concept_explanation",
-  %{
-    pattern_step: 2,
-    variation: :recognition,
-    answer_depth: :medium,
-    if_input_mode_question: false,
-    skill_names: ["Milton Model"]
-  },
-  %{
-    user_input: "Can you give me an example?",
-    user_level: "intermediate"
-  },
-  seed: 42
-)
-
-result.prompt             # compiled string → send to LLM
-result.response_contract  # derived schema → validate LLM response
-```
-
-### All other languages (via container)
+### Container
 
 ```bash
 docker run -v ./prompts:/app/priv/prompts \
@@ -284,7 +257,7 @@ chmod +x .git/hooks/post-commit
 - **Snapshot safety** — pre-edit baseline preserved before any LLM agent can overwrite it
 - **Auto-versioning** — minor version bumped on commit, major versioning on your decision
 - **Live reload** — file watcher recompiles and invalidates cache on every save
-- **MCP server** — connect Kilo Code, Cursor, or Claude to discover and work with your prompt schemas
+- **MCP server** — connect Kilo Code, Cursor, Claude etc to discover and work with your prompt schemas
 
 ---
 
@@ -292,7 +265,7 @@ chmod +x .git/hooks/post-commit
 
 ### The One Rule
 
-`@` means variable. Always. Only. Everywhere.
+`@` means variable. Always. Only. Everywhere.\
 Structural keywords never use `@`.
 
 ### Init Block
@@ -322,14 +295,14 @@ end init
 
 ### Types
 
-| Type | Lifecycle | Notes |
-|------|-----------|-------|
-| `str` | Runtime | Cannot drive branching |
-| `int` | Runtime | Cannot drive branching |
-| `int[a..b]` | Compile-time | Bounded integer |
-| `bool` | Compile-time | |
-| `enum[a, b, c]` | Compile-time | Single value |
-| `list[a, b, c]` | Compile-time | Multiple values |
+| Type          | Lifecycle    | Notes                  |
+| ------------- | ------------ | ---------------------- |
+| `str`         | Runtime      | Cannot drive branching |
+| `int`         | Runtime      | Cannot drive branching |
+| `int[a..b]`   | Compile-time | Bounded integer        |
+| `bool`        | Compile-time |                        |
+| `enum[a, b, c]` | Compile-time | Single value           |
+| `list[a, b, c]` | Compile-time | Multiple values        |
 
 ### Control Flow
 
@@ -383,19 +356,19 @@ response do
 end response
 ```
 
-Compiler derives contract schema from JSON structure.
+Compiler derives contract schema from JSON structure.\
 Multiple response blocks compared across branches — warning if compatible, error if incompatible.
 
 ### Sigils
 
-| Sigil | Meaning |
-|-------|---------|
-| `@name` | Variable |
-| `{name}` | Static fragment |
-| `{{name}}` | Dynamic fragment |
-| `#` | Comment — never reaches LLM |
-| `->` | Documentation — surfaces via MCP |
-| `=` | Default value |
+| Sigil    | Meaning                          |
+| -------- | -------------------------------- |
+| `@name`  | Variable                         |
+| `{name}` | Static fragment                  |
+| `{{name}}` | Dynamic fragment                 |
+| `#`      | Comment — never reaches LLM      |
+| `->`     | Documentation — surfaces via MCP |
+| `=`      | Default value                    |
 
 ---
 
@@ -454,18 +427,18 @@ Available tools: `prompt_schema`, `collection_schema`, `prompt_list`, `collectio
 
 ## HTTP API
 
-| Method | Endpoint | Purpose |
-|--------|----------|---------|
-| `POST` | `/api/compile` | Resolve control flow, return template |
-| `POST` | `/api/inject` | Fill runtime variables into template |
-| `POST` | `/api/render` | Compile and inject in one call |
-| `GET` | `/api/schema/:prompt` | Schema for latest major version |
-| `GET` | `/api/schema/:prompt/:major` | Schema for specific major version |
-| `GET` | `/api/prompts` | List all prompt files |
-| `GET` | `/api/collections` | List all collections |
-| `GET` | `/api/events` | SSE stream for VS Code integration |
-| `POST` | `/api/version` | Trigger version action |
-| `POST` | `/webhooks/commit` | Post-commit hook receiver |
+| Method | Endpoint                   | Purpose                               |
+| ------ | -------------------------- | ------------------------------------- |
+| `POST` | `/api/compile`             | Resolve control flow, return template |
+| `POST` | `/api/inject`              | Fill runtime variables into template  |
+| `POST` | `/api/render`              | Compile and inject in one call        |
+| `GET`  | `/api/schema/:prompt`      | Schema for latest major version       |
+| `GET`  | `/api/schema/:prompt/:major` | Schema for specific major version     |
+| `GET`  | `/api/prompts`             | List all prompt files                 |
+| `GET`  | `/api/collections`         | List all collections                  |
+| `GET`  | `/api/events`              | SSE stream for VS Code integration    |
+| `POST` | `/api/version`             | Trigger version action                |
+| `POST` | `/webhooks/commit`         | Post-commit hook receiver             |
 
 ---
 

@@ -1,0 +1,112 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout 
+  title="Types" 
+  activeSlug="/docs/types"
+  description="Type system documentation for .prompt"
+>
+  <h1>Types</h1>
+  <p>
+    The .prompt language has a type system that validates parameters and drives compile-time branching.
+  </p>
+
+  <h2>Type Categories</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Lifecycle</th>
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>str</code></td>
+        <td>Runtime</td>
+        <td>Cannot drive branching</td>
+      </tr>
+      <tr>
+        <td><code>int</code></td>
+        <td>Runtime</td>
+        <td>Cannot drive branching</td>
+      </tr>
+      <tr>
+        <td><code>int[a..b]</code></td>
+        <td>Compile-time</td>
+        <td>Bounded integer</td>
+      </tr>
+      <tr>
+        <td><code>bool</code></td>
+        <td>Compile-time</td>
+        <td>Boolean</td>
+      </tr>
+      <tr>
+        <td><code>enum[a, b, c]</code></td>
+        <td>Compile-time</td>
+        <td>Single value from list</td>
+      </tr>
+      <tr>
+        <td><code>list[a, b, c]</code></td>
+        <td>Compile-time</td>
+        <td>Multiple values</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Compile-Time vs Runtime</h2>
+  <p>
+    Types marked as <strong>compile-time</strong> can be used in <code>if</code>, <code>case</code>, and <code>vary</code> blocks. The compiler evaluates these at compile time and discards untaken branches.
+  </p>
+  <p>
+    Types marked as <strong>runtime</strong> cannot drive branching. They are injected into the compiled prompt but don't affect which branches are included.
+  </p>
+
+  <h2>Examples</h2>
+
+  <h3>String</h3>
+  <pre><code>params:
+  @user_name: str</code></pre>
+
+  <h3>Integer</h3>
+  <pre><code>params:
+  @age: int</code></pre>
+
+  <h3>Bounded Integer (for loop control)</h3>
+  <pre><code>params:
+  @step: int[1..5]</code></pre>
+
+  <h3>Boolean</h3>
+  <pre><code>params:
+  @is_premium: bool = false</code></pre>
+
+  <h3>Enum</h3>
+  <pre><code>params:
+  @tier: enum[free, pro, enterprise] = free</code></pre>
+
+  <h3>List</h3>
+  <pre><code>params:
+  @skills: list[communication, analysis, creativity]</code></pre>
+
+  <h2>Defaults</h2>
+  <p>
+    Parameters can have default values:
+  </p>
+  <pre><code>params:
+  @depth: enum[shallow, medium, deep] = medium</code></pre>
+
+  <h2>Documentation</h2>
+  <p>
+    Add documentation with <code>-&gt;</code>:
+  </p>
+  <pre><code>params:
+  @name: str -> The user's display name
+  @age: int[18..120] -> User's age (must be 18+)</code></pre>
+
+  <h2>Next Steps</h2>
+  <ul>
+    <li><a href="/docs/control-flow">Control Flow</a> — Use types in branching logic</li>
+    <li><a href="/docs/language-reference">Language Reference</a> — Full syntax</li>
+  </ul>
+</DocsLayout>

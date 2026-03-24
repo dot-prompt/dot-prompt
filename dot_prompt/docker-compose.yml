@@ -1,14 +1,23 @@
-version: "3.8"
 services:
   dot-prompt:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: dot-prompt:latest
+    container_name: dot-prompt-server
+    restart: unless-stopped
     ports:
-      - "4040:4040"  # viewer
-      - "4041:4041"  # HTTP API
+      - "${PROMPT_SERVER_PORT:-4000}:4000"
     volumes:
-      - ./prompts:/prompts
+      - "${PROMPT_DIR_HOST:-./prompts}:/app/prompts:ro"
     environment:
-      - MIX_ENV=dev
-      - PORT=4040
-      - PROMPTS_DIR=/prompts
-      - PHX_SERVER=true
+      - PORT=4000
+      - PROMPTS_DIR=/app/prompts
+      - SECRET_KEY_BASE=${SECRET_KEY_BASE}
+      - LIVE_VIEW_SIGNING_SALT=${LIVE_VIEW_SIGNING_SALT}
+      - PHX_HOST=${PHX_HOST:-localhost}
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "4000"]
+      interval: 10s
+      timeout: 5s
+      retries: 5

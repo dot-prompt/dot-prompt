@@ -79,13 +79,13 @@ defmodule DotPrompt.ApiTest do
   describe "compile/3" do
     test "compiles inline content" do
       content = "Hello @name!"
-      assert {:ok, result, _, _, _, _, _} = DotPrompt.compile(content, %{name: "World"})
+      assert {:ok, %{prompt: result}} = DotPrompt.compile(content, %{name: "World"})
       assert result =~ "Hello World!"
     end
 
     test "compiles by prompt name" do
       # Assuming demo.prompt exists and works
-      assert {:ok, result, _, _, _, _, _} = DotPrompt.compile("demo", %{})
+      assert {:ok, %{prompt: result}} = DotPrompt.compile("demo", %{})
       assert result =~ "tutor"
     end
 
@@ -115,7 +115,7 @@ defmodule DotPrompt.ApiTest do
       content = "Compile-time: @a. Runtime: {{b}}."
       params = %{a: "A"}
       runtime = %{b: "B"}
-      assert {:ok, result, _, _, _} = DotPrompt.render(content, params, runtime)
+      assert {:ok, %{prompt: result}} = DotPrompt.render(content, params, runtime)
       assert result =~ "Compile-time: A"
       assert result =~ "Runtime: B"
     end
@@ -130,11 +130,11 @@ defmodule DotPrompt.ApiTest do
       end @step
       """
 
-      assert {:ok, result, _, _, _, _, _} = DotPrompt.compile(content, %{step: 1})
+      assert {:ok, %{prompt: result}} = DotPrompt.compile(content, %{step: 1})
       assert result =~ "Step One"
       refute result =~ "Step Two"
 
-      assert {:ok, result2, _, _, _, _, _} = DotPrompt.compile(content, %{step: 2})
+      assert {:ok, %DotPrompt.Result{prompt: result2}} = DotPrompt.compile(content, %{step: 2})
       assert result2 =~ "Step Two"
       refute result2 =~ "Step One"
     end
@@ -148,13 +148,15 @@ defmodule DotPrompt.ApiTest do
       """
 
       opts = [annotated: true]
-      assert {:ok, skeleton, selections, _, _, _, _} = DotPrompt.compile(content, %{style: "fun"}, opts)
-      
+
+      assert {:ok, %{prompt: skeleton, vary_selections: selections}} =
+               DotPrompt.compile(content, %{style: "fun"}, opts)
+
       # Verify rich metadata
       assert Map.has_key?(selections, "@style")
       assert selections["@style"].id == "fun"
       assert selections["@style"].text =~ "You are fun!"
-      
+
       # Verify skeleton markers
       assert skeleton =~ "[[section:vary:0:0:_vary_@style:fun,sad:@style]]"
       assert skeleton =~ "[[vary:\"@style\"]]"
@@ -185,7 +187,7 @@ defmodule DotPrompt.ApiTest do
 
       # Compile the prompt which uses fragments
 
-      assert {:ok, result, _, _, _, _, _} = DotPrompt.compile(content, %{})
+      assert {:ok, %{prompt: result}} = DotPrompt.compile(content, %{})
       assert result =~ "Milton Content"
       refute result =~ "Anchoring Content"
     end

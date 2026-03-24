@@ -480,6 +480,8 @@ defmodule DotPrompt.Parser.Parser do
 
       {nodes, _} ->
         label_text = if label, do: String.trim(label), else: ""
+        # Strip # prefix from case label
+        label_text = String.trim_leading(label_text, "#") |> String.trim()
         nodes = if label_text != "", do: [{:text, label_text} | nodes], else: nodes
         parse_case_recursive(remaining, context, [{String.trim(id), label_text, nodes} | acc])
     end
@@ -502,6 +504,8 @@ defmodule DotPrompt.Parser.Parser do
 
         {nodes, _} ->
           label_text = String.trim(label)
+          # Strip # prefix from case label
+          label_text = String.trim_leading(label_text, "#") |> String.trim()
           nodes = if label_text != "", do: [{:text, label_text} | nodes], else: nodes
           parse_case_recursive(remaining, context, [{String.trim(id), label_text, nodes} | acc])
       end

@@ -9,8 +9,11 @@ defmodule DotPrompt.Compiler.FragmentExpander.Static do
 
     try do
       case DotPrompt.compile_to_iodata(path, params) do
-        {:ok, content, _vary, _used, files, _hit, _warnings} -> {:ok, content, files}
-        {:error, reason} -> {:error, "fragment_compile_error: #{path} - #{inspect(reason)}"}
+        {:ok, content, _vary, _used, item_files, _, _warnings, _contract, _major, _version} ->
+          {:ok, content, item_files}
+
+        {:error, reason} ->
+          {:error, "fragment_compile_error: #{path} - #{inspect(reason)}"}
       end
     rescue
       _ -> {:error, "fragment_not_found: #{path}"}

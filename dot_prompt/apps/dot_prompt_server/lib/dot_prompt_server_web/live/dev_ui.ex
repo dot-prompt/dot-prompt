@@ -446,11 +446,8 @@ defmodule DotPromptServerWeb.DevUI do
             tabindex="0"
           >
             <span class="ln"><%= i %></span>
-            <span class="cc">
-              <%= raw(highlight_source(line)) %>
-            </span>
             <%= if @editing_line == i do %>
-              <form phx-change="update_line" phx-submit="save_line" class="edit-input-wrapper">
+              <form phx-change="update_line" phx-submit="save_line" class="edit-form">
                 <input type="hidden" name="index" value={i} />
                 <input 
                   type="text" 
@@ -463,6 +460,10 @@ defmodule DotPromptServerWeb.DevUI do
                   autocomplete="off"
                 />
               </form>
+            <% else %>
+              <span class="cc">
+                <%= raw(highlight_source(line)) %>
+              </span>
             <% end %>
           </div>
         <% end %>
@@ -1070,7 +1071,7 @@ defmodule DotPromptServerWeb.DevUI do
 
   defp render_content_with_earmark(content, compile_params, vary_selections) do
     case Earmark.as_html(content) do
-      {:ok, html, _messages} ->
+      {:ok, %DotPrompt.Result{prompt: html}} ->
         html
         |> mark_params(compile_params)
         |> mark_runtime_vars()
@@ -1577,7 +1578,7 @@ defmodule DotPromptServerWeb.DevUI do
       opts = if socket.assigns.seed, do: [seed: socket.assigns.seed], else: []
 
       case DotPrompt.render(content, params, runtime, opts) do
-        {:ok, result, _vary, _tokens, _cache} ->
+        {:ok, %DotPrompt.Result{prompt: result}} ->
           # We'll use JS to update the output for better visual feedback
           {:noreply, push_event(socket, "update_render_output", %{content: result})}
 
@@ -1764,21 +1765,21 @@ defmodule DotPromptServerWeb.DevUI do
       opts = if seed, do: [{:seed, seed} | opts], else: opts
 
       case DotPrompt.compile(content, params, opts) do
-        {:ok, template, vary_selections, used_vars, _files, cache_hit, _warnings} ->
+        {:ok, %DotPrompt.Result{} = res} ->
           {:noreply,
            socket
            |> assign(
              is_compiling: false,
-             compiled_content: template,
+             compiled_content: res.prompt,
              compiled_annotations: [],
-             used_vars: used_vars,
-             vary_selections: vary_selections,
+             used_vars: res.metadata.used_vars,
+             vary_selections: res.vary_selections,
              section_popover: nil,
-             cache_hit: cache_hit,
-             token_count: estimate_tokens(template),
-             min_tokens: div(estimate_tokens(template), 2),
-             max_tokens: estimate_tokens(template) + 50,
-             vary_slots: map_size(vary_selections)
+             cache_hit: res.cache_hit,
+             token_count: estimate_tokens(res.prompt),
+             min_tokens: div(estimate_tokens(res.prompt), 2),
+             max_tokens: estimate_tokens(res.prompt) + 50,
+             vary_slots: map_size(res.vary_selections)
            )}
 
         {:error, details} ->
@@ -1826,7 +1827,7 @@ defmodule DotPromptServerWeb.DevUI do
 
   def render_markdown(text) do
     case Earmark.as_html(text || "") do
-      {:ok, html, _messages} ->
+      {:ok, html, _} ->
         html
         |> Phoenix.HTML.raw()
 

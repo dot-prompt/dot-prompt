@@ -21,18 +21,69 @@ defmodule DotPromptServerWeb.CompileControllerTest do
     }
 
     conn = post(conn, ~p"/api/compile", body)
-    assert json_response(conn, 200)["template"] =~ "You are a tutor teaching beginner students"
+    response = json_response(conn, 200)
+    assert response["template"] =~ "You are a tutor teaching beginner students"
+  end
+
+  test "response includes compiled_tokens", %{conn: conn} do
+    content = "Hello @name, welcome to the system!"
+
+    body = %{
+      "prompt" => content,
+      "params" => %{"name" => "World"}
+    }
+
+    conn = post(conn, ~p"/api/compile", body)
+    response = json_response(conn, 200)
+    assert %{"compiled_tokens" => tokens} = response
+    assert is_integer(tokens)
+    assert tokens > 0
+  end
+
+  test "response includes vary_selections", %{conn: conn} do
+    content = """
+    init do
+      params:
+        @style: enum[a, b]
+    end init
+    vary @style do
+    a: Style A
+    b: Style B
+    end @style
+    """
+
+    body = %{
+      "prompt" => content,
+      "params" => %{}
+    }
+
+    conn = post(conn, ~p"/api/compile", body)
+    response = json_response(conn, 200)
+    assert %{"vary_selections" => selections} = response
+    assert is_map(selections) or selections == %{}
   end
 
   describe "error handling" do
-    test "returns 422 for invalid prompt syntax", %{conn: conn} do
-      conn = post(conn, ~p"/api/compile", %{"prompt" => "invalid syntax {{ unclosed", "params" => %{}})
-      # Parser accepts this syntax, returns 200 with template as-is
-      response = json_response(conn, 200)
-      assert response["template"] =~ "invalid syntax"
+    test "returns 422 when prompt key is missing", %{conn: conn} do
+      conn = post(conn, ~p"/api/compile", %{"params" => %{}})
+      response = json_response(conn, 422)
+      assert response["error"] == "missing_required_params"
     end
 
-    test "returns error for missing required params", %{conn: conn} do
+    test "returns 422 when params key is missing", %{conn: conn} do
+      conn = post(conn, ~p"/api/compile", %{"prompt" => "Hello @name"})
+      response = json_response(conn, 422)
+      assert response["error"] == "missing_required_params"
+    end
+
+    test "returns 422 for invalid prompt syntax", %{conn: conn} do
+      conn = post(conn, ~p"/api/compile", %{"prompt" => "init do missing end", "params" => %{}})
+      assert json_response(conn, 422)["error"]
+    end
+
+    test "returns 200 for missing optional param values (leaves variables unreplaced)", %{
+      conn: conn
+    } do
       content = """
       init do
         params:
@@ -56,7 +107,12 @@ defmodule DotPromptServerWeb.CompileControllerTest do
       Age: @age
       """
 
-      conn = post(conn, ~p"/api/compile", %{"prompt" => content, "params" => %{"age" => "not_a_number"}})
+      conn =
+        post(conn, ~p"/api/compile", %{
+          "prompt" => content,
+          "params" => %{"age" => "not_a_number"}
+        })
+
       assert json_response(conn, 422)["error"]
     end
 
@@ -69,7 +125,9 @@ defmodule DotPromptServerWeb.CompileControllerTest do
       Level: @level
       """
 
-      conn = post(conn, ~p"/api/compile", %{"prompt" => content, "params" => %{"level" => "expert"}})
+      conn =
+        post(conn, ~p"/api/compile", %{"prompt" => content, "params" => %{"level" => "expert"}})
+
       assert json_response(conn, 422)["error"]
     end
 
@@ -87,6 +145,7 @@ defmodule DotPromptServerWeb.CompileControllerTest do
       end init
       Hello @name
       """
+
       conn = post(conn, ~p"/api/compile", %{"prompt" => content, "params" => nil})
       assert json_response(conn, 422)["error"]
     end

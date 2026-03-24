@@ -403,10 +403,10 @@ defmodule DotPrompt.Parser.Validator do
   end
 
   defp validate_value(value, %{type: :bool}, name) do
-    case value do
-      v when is_boolean(v) -> :ok
-      v when v in ["true", "false", "TRUE", "FALSE", "1", "0"] -> :ok
-      _ -> {:error, "invalid_type: #{name} expected bool, got #{inspect(value)}"}
+    if is_boolean(value) do
+      :ok
+    else
+      {:error, "invalid_type: #{name} expected bool, got #{inspect(value)}"}
     end
   end
 
@@ -456,9 +456,26 @@ defmodule DotPrompt.Parser.Validator do
 
   def parse_def_block(%{def: def_map}) when is_map(def_map) do
     Enum.into(def_map, %{}, fn
-      {:version, v} when is_integer(v) -> {:version, v}
-      {:version, v} when is_binary(v) -> {:version, String.to_integer(v)}
-      {k, v} -> {k, to_string(v)}
+      {:version, v} when is_integer(v) ->
+        {:version, v}
+
+      {:version, v} when is_binary(v) ->
+        case Integer.parse(v) do
+          {val, ""} -> {:version, val}
+          _ -> {:version, v}
+        end
+
+      {:major, v} when is_integer(v) ->
+        {:major, v}
+
+      {:major, v} when is_binary(v) ->
+        case Integer.parse(v) do
+          {val, ""} -> {:major, val}
+          _ -> {:major, v}
+        end
+
+      {k, v} ->
+        {k, if(is_binary(v), do: v, else: to_string(v))}
     end)
   end
 

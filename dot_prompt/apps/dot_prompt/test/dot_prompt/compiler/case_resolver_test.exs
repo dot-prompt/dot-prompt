@@ -57,6 +57,90 @@ defmodule DotPrompt.Compiler.CaseResolverTest do
     end
   end
 
+  describe "# prefix handling in case titles" do
+    test "strips # prefix from case label in output" do
+      content = """
+      init do
+        params:
+          @level: enum[basic, advanced]
+      end init
+      case @level do
+      basic: # Basic
+      Simple explanation.
+      advanced: # Advanced
+      Detailed explanation.
+      end @level
+      """
+
+      assert {:ok, %{prompt: result}} = DotPrompt.compile(content, %{level: "advanced"})
+      # The # should be stripped from the label
+      assert result =~ "Advanced"
+      refute result =~ "# Advanced"
+    end
+
+    test "strips # prefix from case title with space" do
+      content = """
+      init do
+        params:
+          @mode: enum[default, casual]
+      end init
+      case @mode do
+      default: # Default Case
+      This is the default case.
+      casual: Casual Response
+      Hey there!
+      end @mode
+      """
+
+      assert {:ok, %{prompt: result}} = DotPrompt.compile(content, %{mode: "default"})
+      assert result =~ "Default Case"
+      assert result =~ "This is the default case"
+      # The # prefix should be stripped from the output
+      refute result =~ "# Default"
+    end
+
+    test "strips # prefix from case title without space" do
+      content = """
+      init do
+        params:
+          @mode: enum[special, casual]
+      end init
+      case @mode do
+      special: #Special
+      This is special.
+      casual: Casual Response
+      Hey there!
+      end @mode
+      """
+
+      assert {:ok, %{prompt: result}} = DotPrompt.compile(content, %{mode: "special"})
+      assert result =~ "Special"
+      assert result =~ "This is special"
+      # The # prefix should be stripped from the output
+      refute result =~ "#Special"
+    end
+
+    test "handles case title with multiple # prefixes" do
+      content = """
+      init do
+        params:
+          @type: enum[ultra, standard]
+      end init
+      case @type do
+      ultra: ##ultra
+      Ultra special.
+      standard: Standard Response
+      Normal.
+      end @type
+      """
+
+      assert {:ok, %{prompt: result}} = DotPrompt.compile(content, %{type: "ultra"})
+      assert result =~ "ultra"
+      # At least one # should be stripped
+      refute result =~ "##ultra"
+    end
+  end
+
   describe "integration with compiler" do
     test "compiles case block with matching branch" do
       content = """
@@ -70,7 +154,7 @@ defmodule DotPrompt.Compiler.CaseResolverTest do
       end @mode
       """
 
-      assert {:ok, result, _, _, _, _, _} = DotPrompt.compile(content, %{mode: "formal"})
+      assert {:ok, %{prompt: result}} = DotPrompt.compile(content, %{mode: "formal"})
       assert result =~ "You are formal."
       refute result =~ "Hey"
     end
@@ -87,7 +171,7 @@ defmodule DotPrompt.Compiler.CaseResolverTest do
       end @mode
       """
 
-      assert {:ok, result, _, _, _, _, _} = DotPrompt.compile(content, %{mode: "casual"})
+      assert {:ok, %{prompt: result}} = DotPrompt.compile(content, %{mode: "casual"})
       assert result =~ "Hey there!"
       refute result =~ "You are formal"
     end
@@ -106,7 +190,7 @@ defmodule DotPrompt.Compiler.CaseResolverTest do
       end @depth
       """
 
-      assert {:ok, result, _, _, _, _, _} = DotPrompt.compile(content, %{depth: "deep"})
+      assert {:ok, %{prompt: result}} = DotPrompt.compile(content, %{depth: "deep"})
       assert result =~ "Deep Answer"
       assert result =~ "Detailed explanation"
     end
@@ -123,7 +207,7 @@ defmodule DotPrompt.Compiler.CaseResolverTest do
       end @response_type
       """
 
-      assert {:ok, result, _, _, _, _, _} = DotPrompt.compile(content, %{response_type: "json"})
+      assert {:ok, %{prompt: result}} = DotPrompt.compile(content, %{response_type: "json"})
       assert result =~ "JSON"
     end
 
@@ -144,7 +228,7 @@ defmodule DotPrompt.Compiler.CaseResolverTest do
       end @mode
       """
 
-      assert {:ok, result, _, _, _, _, _} =
+      assert {:ok, %{prompt: result}} =
                DotPrompt.compile(content, %{mode: "formal", expert: true})
 
       assert result =~ "formal expert"
