@@ -1,4 +1,7 @@
 defmodule DotPrompt.VersionTracker do
+  @moduledoc """
+  Tracks and manages versions of prompts.
+  """
   use GenServer
   require Logger
 

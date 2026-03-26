@@ -5,7 +5,7 @@ defmodule DotPrompt do
   require Logger
 
   alias DotPrompt.Parser.{Lexer, Parser, Validator}
-  alias DotPrompt.Compiler.{CaseResolver, IfResolver, VaryCompositor, ResponseCollector}
+  alias DotPrompt.Compiler.{CaseResolver, IfResolver, VaryCompositor, ResponseCollector, Context}
   alias DotPrompt.Compiler.FragmentExpander.Collection, as: FragmentCollection
   alias DotPrompt.Compiler.FragmentExpander.Dynamic, as: FragmentDynamic
   alias DotPrompt.Compiler.FragmentExpander.Static, as: FragmentStatic
@@ -227,6 +227,8 @@ defmodule DotPrompt do
           | {:error, map()}
   def compile_to_iodata(prompt_name_or_content, params, opts \\ []) do
     annotated = Keyword.get(opts, :annotated, false)
+    current_dir = Keyword.get(opts, :current_dir, "")
+    requested_major = Keyword.get(opts, :major)
     start_time = System.monotonic_time()
 
     # Normalize params to use atom keys
@@ -248,20 +250,32 @@ defmodule DotPrompt do
         {:file, name} -> name
       end
 
-    {content, files_meta} =
-      if String.contains?(prompt_name_or_content, "\n") or
-           String.contains?(prompt_name_or_content, " ") do
-        {prompt_name_or_content, %{}}
+    # Determine relative directory if this is a file
+    new_current_dir =
+      if prompt_key != :inline do
+        case Path.dirname(prompt_key) do
+          "." -> current_dir
+          dir -> if current_dir == "", do: dir, else: Path.join(current_dir, dir)
+        end
       else
-        major = Keyword.get(opts, :major)
-        {content, mtime, path} = load_prompt_file_with_meta(prompt_name_or_content, major)
-        {content, %{path => mtime}}
+        current_dir
+      end
+
+    {content, files_meta} =
+      case content_ref do
+        {:inline, c} ->
+          {c, %{}}
+
+        {:file, name} ->
+          {c, t, p} = load_prompt_file_with_meta(name, requested_major, current_dir)
+          {c, %{p => t}}
       end
 
     cache_key = cache_key_for_compile(prompt_key, params, content, annotated)
 
     case Structural.get(cache_key) do
-      {:ok, {skeleton_iodata, vary_map, used_vars, cached_files_meta, major, version, declarations}} ->
+      {:ok,
+       {skeleton_iodata, vary_map, used_vars, cached_files_meta, major, version, declarations}} ->
         if stale?(cached_files_meta) do
           # Stale cache, proceed with fresh compilation
           compile_fresh_with_content(
@@ -271,7 +285,8 @@ defmodule DotPrompt do
             params,
             opts,
             start_time,
-            cache_key
+            cache_key,
+            new_current_dir
           )
         else
           duration = System.monotonic_time() - start_time
@@ -326,7 +341,8 @@ defmodule DotPrompt do
           params,
           opts,
           start_time,
-          cache_key
+          cache_key,
+          new_current_dir
         )
 
       # Handle legacy cache format or miss
@@ -338,7 +354,8 @@ defmodule DotPrompt do
           params,
           opts,
           start_time,
-          cache_key
+          cache_key,
+          new_current_dir
         )
     end
   end
@@ -350,7 +367,8 @@ defmodule DotPrompt do
          params,
          opts,
          start_time,
-         cache_key
+         cache_key,
+         current_dir
        ) do
     annotated = Keyword.get(opts, :annotated, false)
     tokens = Lexer.tokenize(content)
@@ -372,7 +390,8 @@ defmodule DotPrompt do
               cache_key,
               annotated,
               ast,
-              warnings
+              warnings,
+              current_dir
             )
 
           {:error, reason} ->
@@ -419,7 +438,8 @@ defmodule DotPrompt do
          cache_key,
          annotated,
          ast,
-         warnings
+         warnings,
+         current_dir
        ) do
     init = ast.init || %{params: %{}, fragments: %{}, docs: nil}
     declarations = Validator.parse_param_declarations_for_schema(init)
@@ -428,29 +448,28 @@ defmodule DotPrompt do
     case validate_params_if_needed(params_with_defaults, declarations) do
       :ok ->
         fragment_defs = Validator.parse_fragment_declarations(init)
-        indent_start = opts[:indent] || 0
 
         case handle_response_contracts(ast.body, warnings) do
           {:error, msg} ->
             {:error, %{error: "validation_error", message: msg}}
 
           {:ok, warnings, first_schema} ->
+            context =
+              Context.new(params_with_defaults, fragment_defs, declarations, opts)
+              |> Map.put(:files_meta, files_meta)
+              |> Map.put(:current_dir, current_dir)
+
             compile_and_build_result(
               prompt_name_or_content,
               content,
               params,
-              opts,
               start_time,
               cache_key,
               annotated,
               ast,
               warnings,
-              params_with_defaults,
-              fragment_defs,
-              indent_start,
-              files_meta,
-              declarations,
-              first_schema
+              first_schema,
+              context
             )
         end
 
@@ -495,30 +514,15 @@ defmodule DotPrompt do
          prompt_name_or_content,
          content,
          params,
-         opts,
          start_time,
          cache_key,
          annotated,
          ast,
          warnings,
-         params_with_defaults,
-         fragment_defs,
-         indent_start,
-         files_meta,
-         declarations,
-         first_schema
+         first_schema,
+         context
        ) do
-    case compile_ast(
-           ast.body,
-           params_with_defaults,
-           fragment_defs,
-           %{},
-           MapSet.new(),
-           indent_start,
-           files_meta,
-           0,
-           declarations
-         ) do
+    case compile_ast(ast.body, context) do
       {:error, reason} ->
         reason_with_line = add_line_info_to_validation_error(reason, content)
         Logger.error("dot-prompt compilation error: #{reason_with_line}")
@@ -533,7 +537,9 @@ defmodule DotPrompt do
         {:error, %{error: "validation_error", message: reason_with_line}}
 
       {skeleton_iodata, vary_map, used_vars, total_files_meta, _count} ->
-        seed = opts[:seed]
+        seed = context.opts[:seed]
+        params_with_defaults = context.params
+        declarations = context.declarations
         def_info = Validator.parse_def_block(ast.init)
         version = def_info[:version] || 1
         major = major_from_version(version)
@@ -749,78 +755,46 @@ defmodule DotPrompt do
 
   defp stale?(_), do: true
 
-  @spec compile_ast(
-          [any()],
-          params(),
-          map(),
-          map(),
-          MapSet.t(),
-          integer(),
-          map(),
-          integer(),
-          map()
-        ) :: {iodata(), map(), MapSet.t(), map(), integer()} | {:error, map()}
-  defp compile_ast(
-         nodes,
-         params,
-         fragment_defs,
-         vary_map,
-         used_vars,
-         indent_level,
-         files_meta,
-         section_count,
-         declarations
-       ) do
-    indent = String.duplicate("  ", indent_level)
+  defp compile_ast(nodes, context) do
+    indent = String.duplicate("  ", context.indent_level)
 
-    Enum.reduce_while(nodes, {[], vary_map, used_vars, files_meta, section_count}, fn node, acc ->
-      case node do
-        {:text, t} ->
-          handle_text_node(t, params, indent, acc)
+    Enum.reduce_while(
+      nodes,
+      {[], context.vary_map, context.used_vars, context.files_meta, context.section_count},
+      fn node, acc ->
+        case node do
+          {:text, t} ->
+            handle_text_node(t, indent, context, acc)
 
-        {:if, var, cond, then_nodes, elifs, else_node} ->
-          handle_if_node(
-            var,
-            cond,
-            then_nodes,
-            elifs,
-            else_node,
-            params,
-            declarations,
-            indent_level,
-            acc
-          )
+          {:if, var, cond, then_nodes, elifs, else_node} ->
+            handle_if_node(var, cond, then_nodes, elifs, else_node, context, acc)
 
-        {:case, var, branches} ->
-          handle_case_node(var, branches, params, declarations, indent_level, acc)
+          {:case, var, branches} ->
+            handle_case_node(var, branches, context, acc)
 
-        {:vary, name, branches} ->
-          handle_vary_node(name, branches, params, fragment_defs, declarations, indent_level, acc)
+          {:vary, name, branches} ->
+            handle_vary_node(name, branches, context, acc)
 
-        {:fragment_static, path} ->
-          handle_static_fragment(path, fragment_defs, params, indent, acc)
+          {:fragment_static, path} ->
+            handle_static_fragment(path, context, acc)
 
-        {:fragment_dynamic, path} ->
-          handle_dynamic_fragment(path, acc)
+          {:fragment_dynamic, path} ->
+            handle_dynamic_fragment(path, acc)
 
-        _ ->
-          {:cont, acc}
+          _ ->
+            {:cont, acc}
+        end
       end
-    end)
+    )
     |> wrap_result()
   end
 
-  defp handle_text_node(
-         text,
-         params,
-         indent,
-         {acc_text, acc_vary, acc_vars, acc_files, acc_count}
-       ) do
+  defp handle_text_node(text, indent, context, {acc_text, acc_vary, acc_vars, acc_files, acc_count}) do
     vars_in_text = Regex.scan(~r/@(\w+)/, text, capture: :all_but_first) |> List.flatten()
     new_vars = Enum.reduce(vars_in_text, acc_vars, &MapSet.put(&2, &1))
 
     interpolated =
-      Enum.reduce(params, text, fn {key, value}, inner_acc ->
+      Enum.reduce(context.params, text, fn {key, value}, inner_acc ->
         key_str = to_string(key)
         val_str = if is_list(value), do: Enum.join(value, ", "), else: to_string(value)
         String.replace(inner_acc, "@#{key_str}", val_str)
@@ -840,13 +814,11 @@ defmodule DotPrompt do
          then_nodes,
          elifs,
          else_node,
-         params,
-         declarations,
-         indent_level,
+         context,
          {acc_text, acc_vary, acc_vars, acc_files, acc_count}
        ) do
     var_name_str = String.trim_leading(var, "@")
-    var_value = get_param(params, var_name_str)
+    var_value = get_param(context.params, var_name_str)
     current_vars = MapSet.put(acc_vars, var_name_str)
 
     {nodes_to_compile, val_label} =
@@ -854,17 +826,16 @@ defmodule DotPrompt do
 
     nodes_result =
       if nodes_to_compile do
-        compile_ast(
-          nodes_to_compile,
-          params,
-          %{},
-          acc_vary,
-          current_vars,
-          indent_level + 1,
-          acc_files,
-          acc_count + 1,
-          declarations
-        )
+        inner_context = %{
+          context
+          | vary_map: acc_vary,
+            used_vars: current_vars,
+            indent_level: context.indent_level + 1,
+            files_meta: acc_files,
+            section_count: acc_count + 1
+        }
+
+        compile_ast(nodes_to_compile, inner_context)
       else
         {"", acc_vary, current_vars, acc_files, acc_count}
       end
@@ -879,8 +850,8 @@ defmodule DotPrompt do
             var_name_str,
             var,
             val_label,
-            declarations,
-            indent_level,
+            context.declarations,
+            context.indent_level,
             acc_count,
             inner_text
           )
@@ -950,36 +921,33 @@ defmodule DotPrompt do
   defp handle_case_node(
          var,
          branches,
-         params,
-         declarations,
-         indent_level,
+         context,
          {acc_text, acc_vary, acc_vars, acc_files, acc_count}
        ) do
     var_name_str = String.trim_leading(var, "@")
-    var_value = get_param(params, var_name_str)
+    var_value = get_param(context.params, var_name_str)
     current_vars = MapSet.put(acc_vars, var_name_str)
     nodes_to_compile = CaseResolver.resolve(var_value, branches)
     match_label = find_case_match_label(branches, var_value)
 
     options =
-      case Map.get(declarations || %{}, var_name_str) do
+      case Map.get(context.declarations || %{}, var_name_str) do
         %{values: vals} when is_list(vals) -> Enum.join(vals, ",")
         _ -> ""
       end
 
     result =
       if nodes_to_compile != [] do
-        compile_ast(
-          nodes_to_compile,
-          params,
-          %{},
-          acc_vary,
-          current_vars,
-          indent_level + 1,
-          acc_files,
-          acc_count + 1,
-          declarations
-        )
+        inner_context = %{
+          context
+          | vary_map: acc_vary,
+            used_vars: current_vars,
+            indent_level: context.indent_level + 1,
+            files_meta: acc_files,
+            section_count: acc_count + 1
+        }
+
+        compile_ast(nodes_to_compile, inner_context)
       else
         {"", acc_vary, current_vars, acc_files, acc_count}
       end
@@ -991,7 +959,7 @@ defmodule DotPrompt do
       {inner_text, inner_vary, inner_vars, inner_files, inner_count} ->
         section_header = [
           "\n[[section:case:",
-          to_string(indent_level),
+          to_string(context.indent_level),
           ":",
           to_string(acc_count),
           ":",
@@ -1031,10 +999,7 @@ defmodule DotPrompt do
   defp handle_vary_node(
          name,
          branches,
-         params,
-         fragment_defs,
-         declarations,
-         indent_level,
+         context,
          {acc_text, acc_vary, acc_vars, acc_files, acc_count}
        ) do
     options = Enum.map_join(branches, ",", fn {k, _, _} -> to_string(k) end)
@@ -1048,17 +1013,16 @@ defmodule DotPrompt do
                                                                                       vars_acc,
                                                                                       files_acc,
                                                                                       count_acc} ->
-        case compile_ast(
-               nodes,
-               params,
-               fragment_defs,
-               var_acc,
-               vars_acc,
-               0,
-               files_acc,
-               0,
-               declarations
-             ) do
+        inner_context = %{
+          context
+          | vary_map: var_acc,
+            used_vars: vars_acc,
+            indent_level: 0,
+            files_meta: files_acc,
+            section_count: 0
+        }
+
+        case compile_ast(nodes, inner_context) do
           {:error, _} = err ->
             {:halt, err}
 
@@ -1080,7 +1044,7 @@ defmodule DotPrompt do
 
         section_header = [
           "\n[[section:vary:",
-          to_string(indent_level),
+          to_string(context.indent_level),
           ":",
           to_string(acc_count),
           ":",
@@ -1098,16 +1062,10 @@ defmodule DotPrompt do
     end
   end
 
-  defp handle_static_fragment(
-         path,
-         fragment_defs,
-         params,
-         indent,
-         {acc_text, acc_vary, acc_vars, acc_files, acc_count}
-       ) do
+  defp handle_static_fragment(path, context, {acc_text, acc_vary, acc_vars, acc_files, acc_count}) do
     name = path |> String.trim_leading("{") |> String.trim_trailing("}")
 
-    case Map.get(fragment_defs, name) do
+    case Map.get(context.fragment_defs, name) do
       %{type: type} = spec ->
         from = spec[:from] || name
 
@@ -1116,26 +1074,12 @@ defmodule DotPrompt do
           from,
           type,
           spec,
-          params,
-          indent,
-          acc_text,
-          acc_vary,
-          acc_vars,
-          acc_files,
-          acc_count
+          context,
+          {acc_text, acc_vary, acc_vars, acc_files, acc_count}
         )
 
       _ ->
-        expand_fragment_by_path(
-          path,
-          params,
-          indent,
-          acc_text,
-          acc_vary,
-          acc_vars,
-          acc_files,
-          acc_count
-        )
+        {:halt, {:error, "fragment_not_declared: #{path} was used but not declared in init block"}}
     end
   end
 
@@ -1144,16 +1088,15 @@ defmodule DotPrompt do
          from,
          type,
          spec,
-         params,
-         indent,
-         acc_text,
-         acc_vary,
-         acc_vars,
-         acc_files,
-         acc_count
+         context,
+         {acc_text, acc_vary, acc_vars, acc_files, acc_count}
        ) do
-    if String.ends_with?(from, "/") or !String.contains?(from, ".") do
-      case FragmentCollection.expand(from, params, 0, acc_files, acc_count, spec) do
+    indent = String.duplicate("  ", context.indent_level)
+
+    if is_collection?(from, context.current_dir) do
+      resolved_from = resolve_collection_path(from, context.current_dir)
+
+      case FragmentCollection.expand(resolved_from, context.params, 0, acc_files, acc_count, spec) do
         {:ok, inner_text, child_files, child_count} ->
           {:cont, {[acc_text, inner_text], acc_vary, acc_vars, child_files, child_count}}
 
@@ -1163,8 +1106,8 @@ defmodule DotPrompt do
     else
       fragment_result =
         if String.starts_with?(type, "static"),
-          do: FragmentStatic.expand(from, params),
-          else: FragmentDynamic.expand(from, params)
+          do: FragmentStatic.expand(from, context.params, current_dir: context.current_dir),
+          else: FragmentDynamic.expand(from, context.params)
 
       case fragment_result do
         {:ok, content_result, child_files} ->
@@ -1190,18 +1133,13 @@ defmodule DotPrompt do
     end
   end
 
-  defp expand_fragment_by_path(
-         path,
-         params,
-         indent,
-         acc_text,
-         acc_vary,
-         acc_vars,
-         acc_files,
-         acc_count
-       ) do
-    if String.ends_with?(path, "/") or !String.contains?(path, ".") do
-      case FragmentCollection.expand(path, params, 0, acc_files, acc_count) do
+  defp expand_fragment_by_path(path, context, {acc_text, acc_vary, acc_vars, acc_files, acc_count}) do
+    indent = String.duplicate("  ", context.indent_level)
+
+    if is_collection?(path, context.current_dir) do
+      resolved_path = resolve_collection_path(path, context.current_dir)
+
+      case FragmentCollection.expand(resolved_path, context.params, 0, acc_files, acc_count) do
         {:ok, inner_text, child_files, child_count} ->
           {:cont, {[acc_text, inner_text], acc_vary, acc_vars, child_files, child_count}}
 
@@ -1209,7 +1147,7 @@ defmodule DotPrompt do
           {:halt, {:error, reason}}
       end
     else
-      case FragmentStatic.expand(path, params) do
+      case FragmentStatic.expand(path, context.params, current_dir: context.current_dir) do
         {:ok, content_result, child_files} ->
           indented_content = indent_content(content_result, indent)
           clean_path = String.replace_suffix(path, ".prompt", "")
@@ -1229,6 +1167,42 @@ defmodule DotPrompt do
         {:error, reason} ->
           {:halt, {:error, reason}}
       end
+    end
+  end
+
+  defp is_collection?(path, current_dir) do
+    p_dir = prompts_dir()
+
+    cond do
+      String.starts_with?(path, "./") and current_dir != "" and current_dir != "." ->
+        clean = String.slice(path, 2..-1//1)
+        File.dir?(Path.join([p_dir, current_dir, clean]))
+
+      current_dir != "" and current_dir != "." and File.dir?(Path.join([p_dir, current_dir, path])) ->
+        true
+
+      true ->
+        String.ends_with?(path, "/") or
+          (!String.contains?(path, ".") and File.dir?(Path.join(p_dir, path)))
+    end
+  end
+
+  defp resolve_collection_path(path, current_dir) do
+    p_dir = prompts_dir()
+
+    cond do
+      String.starts_with?(path, "./") and current_dir != "" and current_dir != "." ->
+        clean = String.slice(path, 2..-1//1)
+        Path.join(current_dir, clean)
+
+      current_dir != "" and current_dir != "." and File.dir?(Path.join([p_dir, current_dir, path])) ->
+        Path.join(current_dir, path)
+
+      File.dir?(Path.join(p_dir, path)) ->
+        path
+
+      true ->
+        path
     end
   end
 
@@ -1266,10 +1240,10 @@ defmodule DotPrompt do
     end
   end
 
-  defp load_prompt_file_with_meta(name, major) do
+  defp load_prompt_file_with_meta(name, major, current_dir \\ "") do
     prompts_dir = prompts_dir()
     name_str = to_string(name)
-    {content, mtime, full_path} = resolve_prompt_path(prompts_dir, name_str)
+    {content, mtime, full_path} = resolve_prompt_path(prompts_dir, name_str, current_dir)
 
     if major && content do
       check_major_version(
@@ -1287,7 +1261,32 @@ defmodule DotPrompt do
     end
   end
 
-  defp resolve_prompt_path(prompts_dir, name_str) do
+  defp resolve_prompt_path(prompts_dir, name_str, current_dir \\ "") do
+    cond do
+      # 1. Explicitly relative to current directory
+      String.starts_with?(name_str, "./") and current_dir != "" and current_dir != "." ->
+        clean_name = String.slice(name_str, 2..-1//1)
+        do_resolve(prompts_dir, Path.join(current_dir, clean_name))
+
+      true ->
+        # 2. Try relative to current_dir first
+        res =
+          if current_dir != "" and current_dir != "." do
+            do_resolve(prompts_dir, Path.join(current_dir, name_str))
+          else
+            {nil, nil, nil}
+          end
+
+        if res == {nil, nil, nil} do
+          # 3. Try absolute (relative to prompts_dir root)
+          do_resolve(prompts_dir, name_str)
+        else
+          res
+        end
+    end
+  end
+
+  defp do_resolve(prompts_dir, name_str) do
     path = Path.join(prompts_dir, name_str)
 
     cond do

@@ -1,0 +1,57 @@
+# STEP 1: Build App
+FROM elixir:1.18-slim AS build_app
+
+RUN apt-get update && \
+    apt-get install -y build-essential git && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+RUN mix local.hex --force && \
+    mix local.rebar --force
+
+ENV MIX_ENV=prod
+
+COPY mix.exs mix.lock ./
+COPY apps/dot_prompt/mix.exs ./apps/dot_prompt/
+COPY apps/dot_prompt_server/mix.exs ./apps/dot_prompt_server/
+
+RUN mix deps.get --only prod
+RUN mix deps.compile
+
+COPY config/ ./config/
+COPY apps/ ./apps/
+
+RUN mix do compile, release --overwrite
+
+# STEP 2: Final Runtime
+FROM debian:sid-slim
+
+RUN apt-get update && \
+    apt-get install -y libssl3 ncurses-base ca-certificates locales inotify-tools && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Set the locale
+RUN sed -i '/en_US.UTF-8/s/^# //' /etc/locale.gen && locale-gen
+ENV LANG en_US.UTF-8
+ENV LANGUAGE en_US:en
+ENV LC_ALL en_US.UTF-8
+
+WORKDIR /app
+RUN useradd -m elixir && chown -R elixir:elixir /app
+
+USER elixir
+
+# Copy the entire release
+COPY --from=build_app --chown=elixir:elixir /app/_build/prod/rel/dot_prompt_umbrella ./
+
+# Runtime Environment Variables
+ENV PORT=4000
+ENV DISABLE_UI=true
+EXPOSE 4000
+
+# Set entrypoint to the service bin
+ENTRYPOINT ["/app/bin/dot_prompt_umbrella"]
+CMD ["start"]

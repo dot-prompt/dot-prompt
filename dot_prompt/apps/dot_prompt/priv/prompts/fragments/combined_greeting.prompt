@@ -7,20 +7,20 @@ init do
     @time_of_day: enum[morning, afternoon, evening]
 
   fragments:
-    @combined_greeting:
-      type: static
-      from: fragments/combined_greeting
-      doc: "A fragment that references other fragments"
+    {simple_greeting}: from: fragments/simple_greeting
+    {personalized_greeting}: from: fragments/personalized_greeting
+    {conditional_greeting}: from: fragments/conditional_greeting
+
 end init
 
 # Combined Greeting Fragment
 This greeting combines multiple fragments:
 
-{fragments/simple_greeting}
+{simple_greeting}
 
-{fragments/personalized_greeting}
+{personalized_greeting}
 
-{fragments/conditional_greeting}
+{conditional_greeting}
 
 ---
 End of combined greeting.

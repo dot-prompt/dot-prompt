@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: dot-prompt:latest
+    image: dot-prompt:production
     container_name: dot-prompt-server
     restart: unless-stopped
     ports:
@@ -11,13 +11,17 @@ services:
     volumes:
       - "${PROMPT_DIR_HOST:-./prompts}:/app/prompts:ro"
     environment:
+      - MIX_ENV=dev
       - PORT=4000
       - PROMPTS_DIR=/app/prompts
-      - SECRET_KEY_BASE=${SECRET_KEY_BASE}
-      - LIVE_VIEW_SIGNING_SALT=${LIVE_VIEW_SIGNING_SALT}
       - PHX_HOST=${PHX_HOST:-localhost}
+      # In dev, Phoenix uses defaults from config/dev.exs
+      # but we keep these as optional overrides
+      - SECRET_KEY_BASE=${SECRET_KEY_BASE:-}
+      - LIVE_VIEW_SIGNING_SALT=${LIVE_VIEW_SIGNING_SALT:-}
     healthcheck:
       test: ["CMD", "nc", "-z", "localhost", "4000"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

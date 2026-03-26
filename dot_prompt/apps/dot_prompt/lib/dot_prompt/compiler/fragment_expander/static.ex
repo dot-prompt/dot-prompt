@@ -3,12 +3,12 @@ defmodule DotPrompt.Compiler.FragmentExpander.Static do
   Expands static fragments by compiling them.
   """
 
-  @spec expand(String.t(), map()) :: {:ok, iodata(), map()} | {:error, String.t()}
-  def expand(fragment_path, params) do
+  @spec expand(String.t(), map(), keyword()) :: {:ok, iodata(), map()} | {:error, String.t()}
+  def expand(fragment_path, params, opts \\ []) do
     path = String.trim(fragment_path, "{") |> String.trim("}")
 
     try do
-      case DotPrompt.compile_to_iodata(path, params) do
+      case DotPrompt.compile_to_iodata(path, params, opts) do
         {:ok, content, _vary, _used, item_files, _, _warnings, _contract, _major, _version, _decls} ->
           {:ok, content, item_files}
 

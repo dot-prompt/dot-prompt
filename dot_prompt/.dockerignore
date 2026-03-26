@@ -1,23 +1,26 @@
-# Elixir/Phoenix
+# Elixir/Mix
 /_build
 /deps
-/*.ez
+/*.beam
 /erl_crash.dump
-/mix.lock (only if we want to refresh it, but usually better to keep for reproducible builds, though we copy it explicitly anyway)
+/dot_prompt/mix.lock
 
-# Assets
-/apps/dot_prompt_server/assets/node_modules
-/apps/dot_prompt_server/priv/static (unless we want to include pre-built assets, but we build them in Docker)
+# Node/Assets
+node_modules
+apps/dot_prompt_server/assets/node_modules
 
-# Environment and Secrets
-/.env
-/*.env
-/config/*.secret.exs
+# Git
+.git
+.gitignore
 
-# Version Control
-/.git
-/.gitignore
+# Environment
+.env
+.env.local
 
-# IDEs
-/.vscode
-/.elixir_ls
+# VS Code
+.vscode
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore

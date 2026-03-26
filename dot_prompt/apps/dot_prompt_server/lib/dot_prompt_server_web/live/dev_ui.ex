@@ -71,6 +71,7 @@ defmodule DotPromptServerWeb.DevUI do
      |> assign(
        prompts: DotPrompt.list_root_prompts(),
        fragments: DotPrompt.list_fragment_prompts(),
+       fragment_tree: build_tree(DotPrompt.list_fragment_prompts()),
        collections: DotPrompt.list_collections(),
        active_tool: :editor,
        active_file: file_name,
@@ -115,6 +116,7 @@ defmodule DotPromptServerWeb.DevUI do
      |> assign(
        prompts: DotPrompt.list_root_prompts(),
        fragments: DotPrompt.list_fragment_prompts(),
+       fragment_tree: build_tree(DotPrompt.list_fragment_prompts()),
        collections: DotPrompt.list_collections(),
        active_tool: :editor,
        active_file: nil,
@@ -163,6 +165,7 @@ defmodule DotPromptServerWeb.DevUI do
         scratch_edits={@scratch_edits}
         nav_width={@nav_width}
         collapsed_folders={@collapsed_folders}
+        fragment_tree={@fragment_tree}
       />
 
       <div id="nav-resizer" phx-hook="Resizable" data-target-id="nav-sidebar" data-side="left" class="resizer border-r border-gray-800"></div>
@@ -279,7 +282,7 @@ defmodule DotPromptServerWeb.DevUI do
       <div class="ns">
         <div class="nl">Prompts</div>
         <div class="fdir" phx-click="toggle_folder" phx-value-folder="prompts">
-          <%= if MapSet.member?(@collapsed_folders, "prompts"), do: "▶", else: "▼" %> prompts/
+          <%= if MapSet.member?(@collapsed_folders, "prompts"), do: "▶", else: "▼" %> prompts
         </div>
         <%= if !MapSet.member?(@collapsed_folders, "prompts") do %>
           <%= for prompt <- @prompts do %>
@@ -295,28 +298,12 @@ defmodule DotPromptServerWeb.DevUI do
 
       <div class="ns" style="margin-top: 8px">
         <div class="nl">Fragments</div>
-        <%= if @collections != [] do %>
-          <%= for collection <- @collections do %>
-            <div class="fdir" phx-click="toggle_folder" phx-value-folder={collection}>
-              <%= if MapSet.member?(@collapsed_folders, collection), do: "▶", else: "▼" %> <%= collection %>/
-            </div>
-            <%= if !MapSet.member?(@collapsed_folders, collection) do %>
-              <%= for fragment <- @fragments do %>
-                <%= if String.starts_with?(fragment, collection) do %>
-                  <.link patch={"/prompts/#{fragment}"} class={["fr", if(fragment == @active_file, do: "on")]}>
-                    <div class="fdot"></div><%= String.replace_leading(fragment, collection <> "/", "") %>
-                  </.link>
-                <% end %>
-              <% end %>
-            <% end %>
-          <% end %>
-        <% else %>
-          <%= for fragment <- @fragments do %>
-            <.link patch={"/prompts/#{fragment}"} class={["fr", if(fragment == @active_file, do: "on")]}>
-              <div class="fdot"></div><%= Path.basename(fragment) %>
-            </.link>
-          <% end %>
-        <% end %>
+        <.render_tree 
+          tree={@fragment_tree} 
+          active_file={@active_file} 
+          collapsed_folders={@collapsed_folders} 
+          parent_path="" 
+        />
       </div>
       <div class="ndiv"></div>
       <div class="ns">
@@ -1620,47 +1607,72 @@ defmodule DotPromptServerWeb.DevUI do
     do_compile(socket)
   end
 
-  def handle_params(params = %{"file" => file_list}, _uri, socket) do
-    file_name = if is_list(file_list), do: Enum.join(file_list, "/"), else: file_list
+  def handle_params(params, uri, socket) do
+    tool_atom =
+      cond do
+        String.contains?(uri, "/telemetry") -> :telemetry
+        String.contains?(uri, "/cache") -> :cache
+        String.contains?(uri, "/stats") -> :cache
+        String.contains?(uri, "/render") -> :render
+        String.contains?(uri, "/viewer") -> :render
+        true -> socket.assigns[:active_tool] || :editor
+      end
 
-    if file_name != socket.assigns.active_file do
-      content = load_prompt_file(file_name)
-      runtime_params = load_runtime_params(file_name, params)
-      {active_schema, compile_params, error_msg} = load_schema_and_params(file_name)
-
-      socket =
-        socket
-        |> assign(
-          active_file: file_name,
-          source_content: content,
-          compiled_content: nil,
-          active_schema: active_schema,
-          compile_params: compile_params,
-          runtime_params: runtime_params,
-          show_params_pane: true,
-          active_param_dropdown: nil,
-          error: error_msg,
-          is_compiling: false,
-          seed: nil
-        )
-
-      if error_msg do
-        {:noreply, socket}
+    socket =
+      if tool_atom == :telemetry do
+        assign(socket, telemetry_events: DotPrompt.Telemetry.list_events())
       else
         socket
-        |> assign(
-          active_file: file_name,
-          active_schema: active_schema,
-          compile_params: compile_params,
-          runtime_params: runtime_params,
-          source_content: content,
-          used_vars: MapSet.new(),
-          seed: nil
-        )
-        |> do_compile()
       end
-    else
-      {:noreply, socket}
+
+    socket = assign(socket, active_tool: tool_atom)
+
+    case params do
+      %{"file" => file_list} ->
+        file_name = if is_list(file_list), do: Enum.join(file_list, "/"), else: file_list
+
+        if file_name != socket.assigns.active_file do
+          content = load_prompt_file(file_name)
+          runtime_params = load_runtime_params(file_name, params)
+          {active_schema, compile_params, error_msg} = load_schema_and_params(file_name)
+
+          socket =
+            socket
+            |> assign(
+              active_file: file_name,
+              source_content: content,
+              compiled_content: nil,
+              active_schema: active_schema,
+              compile_params: compile_params,
+              runtime_params: runtime_params,
+              show_params_pane: true,
+              active_param_dropdown: nil,
+              error: error_msg,
+              is_compiling: false,
+              seed: nil
+            )
+
+          if error_msg do
+            {:noreply, socket}
+          else
+            socket
+            |> assign(
+              active_file: file_name,
+              active_schema: active_schema,
+              compile_params: compile_params,
+              runtime_params: runtime_params,
+              source_content: content,
+              used_vars: MapSet.new(),
+              seed: nil
+            )
+            |> do_compile()
+          end
+        else
+          {:noreply, socket}
+        end
+
+      _ ->
+        {:noreply, socket}
     end
   end
 
@@ -1732,27 +1744,6 @@ defmodule DotPromptServerWeb.DevUI do
       _ ->
         Map.get(spec, :default, "")
     end
-  end
-
-  def handle_params(_params, uri, socket) do
-    tool_atom =
-      cond do
-        String.contains?(uri, "/telemetry") -> :telemetry
-        String.contains?(uri, "/cache") -> :cache
-        String.contains?(uri, "/stats") -> :cache
-        String.contains?(uri, "/render") -> :render
-        String.contains?(uri, "/viewer") -> :render
-        true -> socket.assigns[:active_tool] || :editor
-      end
-
-    socket =
-      if tool_atom == :telemetry do
-        assign(socket, telemetry_events: DotPrompt.Telemetry.list_events())
-      else
-        socket
-      end
-
-    {:noreply, assign(socket, active_tool: tool_atom)}
   end
 
   defp do_compile(socket) do
@@ -1861,5 +1852,72 @@ defmodule DotPromptServerWeb.DevUI do
       :int -> 4
       _ -> 10
     end
+  end
+
+  defp build_tree(paths) do
+    paths
+    |> Enum.reduce(%{}, fn path, acc ->
+      parts = String.split(path, "/")
+      put_in_tree(acc, parts, path)
+    end)
+    |> sort_tree()
+  end
+
+  defp put_in_tree(tree, [name], full_path) do
+    Map.put(tree, name, {:file, full_path})
+  end
+
+  defp put_in_tree(tree, [dir | rest], full_path) do
+    subtree = Map.get(tree, dir, %{})
+    Map.put(tree, dir, put_in_tree(subtree, rest, full_path))
+  end
+
+  defp sort_tree(tree) do
+    tree
+    |> Enum.sort(fn {name1, content1}, {name2, content2} ->
+      case {content1, content2} do
+        {{:file, _}, {:file, _}} -> name1 < name2
+        {{:file, _}, _} -> false
+        {_, {:file, _}} -> true
+        {_, _} -> name1 < name2
+      end
+    end)
+    |> Enum.map(fn {name, content} ->
+      case content do
+        {:file, _} = f -> {name, f}
+        subtree -> {name, sort_tree(subtree)}
+      end
+    end)
+  end
+
+  defp render_tree(assigns) do
+    ~H"""
+    <%= for {name, content} <- @tree do %>
+      <%= case content do %>
+        <% {:file, path} -> %>
+          <.link patch={"/prompts/#{path}"} class={["fr", if(path == @active_file, do: "on")]}>
+            <div class="fdot"></div><%= name %>
+          </.link>
+        <% subtree -> %>
+          <% 
+            folder_path = if @parent_path == "", do: name, else: "#{@parent_path}/#{name}"
+            is_collapsed = MapSet.member?(@collapsed_folders, folder_path)
+          %>
+          <div class="fdir" phx-click="toggle_folder" phx-value-folder={folder_path}>
+            <span style="font-size: 8px; width: 10px; display: inline-block;"><%= if is_collapsed, do: "▶", else: "▼" %></span> <%= name %>
+          </div>
+          <%= if !is_collapsed do %>
+            <div class="nested-tree" style="margin-left: 10px; border-left: 1px solid rgba(255,255,255,0.05); margin-bottom: 2px;">
+              <.render_tree 
+                tree={subtree} 
+                active_file={@active_file} 
+                collapsed_folders={@collapsed_folders} 
+                parent_path={folder_path}
+              />
+            </div>
+          <% end %>
+      <% end %>
+    <% end %>
+    """
   end
 end

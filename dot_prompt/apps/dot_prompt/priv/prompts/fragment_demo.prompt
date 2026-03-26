@@ -14,6 +14,14 @@ init do
     - @name
     - @user_level
     - @time_of_day
+
+  fragments:
+    {simple_greeting}: from: fragments/simple_greeting
+    {personalized_greeting}: from: fragments/personalized_greeting
+    {conditional_greeting}: from: fragments/conditional_greeting
+    {tips}: from: fragments/tips/
+    {combined_greeting}: from: fragments/combined_greeting
+
 end init
 
 # Prompt with Fragment Expansion Demo
@@ -21,23 +29,23 @@ end init
 This prompt demonstrates all the fragment types available in dot_prompt.
 
 ## Static Fragment (simple, cached)
-{fragments/simple_greeting}
+{simple_greeting}
 
 ## Dynamic Fragment (re-evaluated each time)
-{{fragments/personalized_greeting}}
+{{personalized_greeting}}
 
 ## Conditional Fragment (if/else logic)
-{#if @include_welcome}
-{fragments/conditional_greeting}
-{/if}
+if @include_welcome do
+  {conditional_greeting}
+end @include_welcome
 
 ## Collection Fragment (iterates over folder)
-{#if @include_tips}
-{fragments/tips/}
-{/if}
+if @include_tips do
+  {tips}
+end @include_tips
 
 ## Combined Fragment (references other fragments)
-{fragments/combined_greeting}
+{combined_greeting}
 
 ---
 End of prompt

@@ -392,9 +392,9 @@ defmodule DotPrompt.ErrorHandlingTest do
       content = """
       init do
         fragments:
-          {missing}: collection from: completely_different_dir
+          {completely_different_dir}
       end init
-      {missing}
+      {completely_different_dir}
       """
 
       result = DotPrompt.compile(content, %{})
@@ -403,7 +403,7 @@ defmodule DotPrompt.ErrorHandlingTest do
       # Error is returned as a map with :error and :message keys
       assert {:error, error_msg} = result
       assert is_map(error_msg)
-      assert error_msg.message =~ "collection_not_found"
+      assert error_msg.message =~ "fragment_not_found"
     end
   end
 

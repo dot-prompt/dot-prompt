@@ -5,16 +5,14 @@ init do
     @topic: str
 
   fragments:
-    @collection_tips:
-      type: static
-      from: fragments/tips/collection_tips
-      doc: "A fragment with collection iteration - iterates over all .prompt files in a folder"
+    {tips}: from: fragments/tips/
+
 end init
 
 # Tips Collection Fragment
 This fragment iterates over all .prompt files in the tips folder:
 
-{fragments/tips/}
+{tips}
 
 ---
 All tips above were collected from the tips/ folder.

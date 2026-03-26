@@ -13,6 +13,11 @@ init do
     @experience: int -> years in business
     @customer_count: int -> number of customers
 
+  fragments:
+    {simple_greeting}: from: simple_greeting
+    {personalized_greeting}: from: personalized_greeting
+    {conditional_greeting}: from: conditional_greeting
+
 end init
 
 # Fragment that combines other fragments
@@ -21,3 +26,4 @@ end init
 {personalized_greeting}
 
 {conditional_greeting}
+

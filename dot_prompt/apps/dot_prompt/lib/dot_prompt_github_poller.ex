@@ -1,4 +1,7 @@
 defmodule DotPrompt.GitHubPoller do
+  @moduledoc """
+  Polls GitHub for changes in prompt files.
+  """
   use GenServer
   require Logger
 

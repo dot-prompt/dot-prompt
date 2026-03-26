@@ -8,15 +8,10 @@ defmodule DotPrompt.Parser.Validator do
   def validate(ast) do
     case collect_errors(ast.body, 0) do
       [] ->
-        params_result = validate_params_declared(ast)
-
-        if params_result == :ok do
-          case validate_fragments(ast) do
-            :ok -> {:ok, []}
-            error -> error
-          end
-        else
-          params_result
+        with :ok <- validate_params_declared(ast),
+             :ok <- validate_fragments_declared(ast),
+             :ok <- validate_fragments(ast) do
+          {:ok, []}
         end
 
       errors ->
@@ -120,6 +115,56 @@ defmodule DotPrompt.Parser.Validator do
       :ok -> validate_params_types(params, declarations)
       error -> error
     end
+  end
+
+  defp validate_fragments_declared(ast) do
+    declared_fragments = parse_fragment_declarations(ast.init) |> Map.keys() |> MapSet.new()
+    used_fragments = extract_fragments_from_body(ast.body, [])
+
+    unknown =
+      Enum.reject(used_fragments, fn raw ->
+        name =
+          raw
+          |> String.trim_leading("{")
+          |> String.trim_leading("{")
+          |> String.trim_trailing("}")
+          |> String.trim_trailing("}")
+
+        MapSet.member?(declared_fragments, name)
+      end)
+
+    if unknown == [] do
+      :ok
+    else
+      {:error,
+       "unknown_fragment: #{hd(unknown)} referenced but not declared in init block. Inline fragment declarations are no longer supported."}
+    end
+  end
+
+  defp extract_fragments_from_body(nodes, acc) when is_list(nodes) do
+    Enum.reduce(nodes, acc, fn node, current_acc ->
+      case node do
+        {:fragment_static, path} ->
+          [path | current_acc]
+
+        {:fragment_dynamic, path} ->
+          [path | current_acc]
+
+        {:if, _var, _cond, then_nodes, elifs, else_node} ->
+          branches = [then_nodes | [else_node | Enum.map(elifs, &elem(&1, 1))]]
+          extract_fragments_from_body(branches, current_acc)
+
+        {:case, _var, branches} ->
+          extract_fragments_from_body(Enum.map(branches, &elem(&1, 2)), current_acc)
+
+        {:vary, _var, branches} ->
+          extract_fragments_from_body(Enum.map(branches, &elem(&1, 2)), current_acc)
+
+        _ ->
+          current_acc
+      end
+    end)
+    |> Enum.uniq()
   end
 
   defp validate_params_declared(ast) do

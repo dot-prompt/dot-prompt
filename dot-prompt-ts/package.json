@@ -1,0 +1,48 @@
+{
+  "name": "dot-prompt",
+  "version": "0.1.0",
+  "description": "TypeScript client for the dot-prompt container API",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src/**/*.ts",
+    "format": "prettier --write src/**/*.ts"
+  },
+  "keywords": [
+    "dot-prompt",
+    "llm",
+    "prompts",
+    "ai"
+  ],
+  "author": "Antigravity",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "zod": "^3.22.4",
+    "eventsource-parser": "^1.1.2"
+  },
+  "devDependencies": {
+    "@types/node": "^18.19.0",
+    "eslint": "^8.56.0",
+    "prettier": "^3.1.1",
+    "tsup": "^8.0.1",
+    "typescript": "^5.3.3",
+    "vitest": "^1.1.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
