@@ -1,0 +1,24 @@
+services:
+  dot-prompt-headed:
+    build:
+      context: .
+      dockerfile: Dockerfile.headed
+    image: dot-prompt:headed
+    container_name: dot-prompt-headed
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    volumes:
+      - "${PROMPT_DIR_HOST:-./prompts}:/app/prompts:ro"
+    environment:
+      - PORT=4000
+      - PROMPTS_DIR=/app/prompts
+      - SECRET_KEY_BASE=${SECRET_KEY_BASE:-replace_with_secure_key}
+      - LIVE_VIEW_SIGNING_SALT=${LIVE_VIEW_SIGNING_SALT:-replace_with_secure_salt}
+      - PHX_HOST=${PHX_HOST:-localhost}
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/4000'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s

@@ -45,7 +45,7 @@ class DotPromptAsyncClient:
 
     async def get_schema(self, prompt_name: str) -> PromptSchema:
         """Get the schema for a specific prompt."""
-        data = await self._transport.get(f"/api/prompts/{prompt_name}/schema")
+        data = await self._transport.get(f"/api/schema/{prompt_name}")
         return PromptSchema(**data)
 
     async def compile(
@@ -62,8 +62,8 @@ class DotPromptAsyncClient:
         }
         if "seed" in options:
             body["seed"] = options["seed"]
-        if "major" in options:
-            body["major"] = options["major"]
+        if "version" in options:
+            body["version"] = options["version"]
 
         data = await self._transport.post("/api/compile", body)
         return CompileResult(**data)
@@ -72,6 +72,7 @@ class DotPromptAsyncClient:
         self,
         prompt: str,
         params: dict[str, Any],
+        runtime: dict[str, Any] | None = None,
         options: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Render a prompt (compile + fill in variables)."""
@@ -79,23 +80,24 @@ class DotPromptAsyncClient:
         body = {
             "prompt": prompt,
             "params": params,
+            "runtime": runtime or {},
         }
         if "seed" in options:
             body["seed"] = options["seed"]
-        if "major" in options:
-            body["major"] = options["major"]
+        if "version" in options:
+            body["version"] = options["version"]
 
         return await self._transport.post("/api/render", body)
 
     async def inject(
         self,
-        prompt: str,
-        files: dict[str, str],
+        template: str,
+        runtime: dict[str, str],
     ) -> dict[str, Any]:
-        """Inject file contents into a prompt."""
+        """Inject runtime variables into a template string."""
         return await self._transport.post("/api/inject", {
-            "prompt": prompt,
-            "files": files,
+            "template": template,
+            "runtime": runtime,
         })
 
     async def validate_response(self, response: dict, contract: dict) -> bool:

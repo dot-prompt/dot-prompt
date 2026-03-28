@@ -240,7 +240,8 @@ defmodule DotPrompt do
 
     content_ref =
       if String.contains?(prompt_name_or_content, "\n") or
-           String.contains?(prompt_name_or_content, " ") do
+           String.contains?(prompt_name_or_content, " ") or
+           String.contains?(prompt_name_or_content, "{{") do
         {:inline, prompt_name_or_content}
       else
         {:file, to_string(prompt_name_or_content)}
@@ -781,7 +782,7 @@ defmodule DotPrompt do
             handle_static_fragment(path, context, acc)
 
           {:fragment_dynamic, path} ->
-            handle_dynamic_fragment(path, acc)
+            handle_dynamic_fragment(path, context, acc)
 
           _ ->
             {:cont, acc}
@@ -1072,8 +1073,13 @@ defmodule DotPrompt do
   defp handle_static_fragment(path, context, {acc_text, acc_vary, acc_vars, acc_files, acc_count}) do
     name = path |> String.trim_leading("{") |> String.trim_trailing("}")
 
+    IO.puts(
+      "DEBUG handle_static_fragment: name=#{name}, fragment_defs keys=#{inspect(Map.keys(context.fragment_defs))}"
+    )
+
     case Map.get(context.fragment_defs, name) do
       %{type: type} = spec ->
+        IO.puts("DEBUG found spec: type=#{inspect(type)}, spec=#{inspect(spec)}")
         from = spec[:from] || name
 
         expand_static_fragment(
@@ -1086,6 +1092,10 @@ defmodule DotPrompt do
         )
 
       _ ->
+        IO.puts(
+          "DEBUG fragment NOT found in defs, got: #{inspect(Map.get(context.fragment_defs, name))}"
+        )
+
         {:halt,
          {:error, "fragment_not_declared: #{path} was used but not declared in init block"}}
     end
@@ -1112,8 +1122,10 @@ defmodule DotPrompt do
           {:halt, {:error, reason}}
       end
     else
+      is_static = type == "static" or String.contains?(type, "static")
+
       fragment_result =
-        if String.starts_with?(type, "static"),
+        if is_static,
           do: FragmentStatic.expand(from, context.params, current_dir: context.current_dir),
           else: FragmentDynamic.expand(from, context.params)
 
@@ -1220,8 +1232,21 @@ defmodule DotPrompt do
     end
   end
 
-  defp handle_dynamic_fragment(path, {acc_text, acc_vary, acc_vars, acc_files, acc_count}) do
-    {:cont, {[acc_text, path], acc_vary, acc_vars, acc_files, acc_count}}
+  defp handle_dynamic_fragment(
+         path,
+         context,
+         {acc_text, acc_vary, acc_vars, acc_files, acc_count}
+       ) do
+    name = path |> String.trim_leading("{{") |> String.trim_trailing("}}")
+    Logger.error("DEBUG handle_dynamic_fragment: path=#{path}, name=#{name}")
+
+    case FragmentDynamic.expand(name, context.params) do
+      {:ok, content} ->
+        {:cont, {[acc_text, content], acc_vary, MapSet.put(acc_vars, name), acc_files, acc_count}}
+
+      {:error, reason} ->
+        {:halt, {:error, reason}}
+    end
   end
 
   defp wrap_result({:error, _} = err), do: err

@@ -130,7 +130,9 @@ defmodule DotPrompt.Parser.Parser do
         token.meta <> "\n" <> Enum.map_join(indented, "\n", &token_to_string_raw/1)
       end
 
-    new_fragments = Map.put(acc.fragments, token.value, %{type: meta, doc: nil})
+    # Strip braces from fragment name for the map key
+    key = token.value |> String.trim_leading("{") |> String.trim_trailing("}")
+    new_fragments = Map.put(acc.fragments, key, %{type: meta, doc: nil})
     parse_init_block(rest, %{acc | fragments: new_fragments})
   end
 

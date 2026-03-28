@@ -212,8 +212,8 @@ The color is {color}.
         
         assert response1.json()["vary_selections"] == response2.json()["vary_selections"]
 
-    def test_compile_with_major_version(self, base_url):
-        """Test compile with major version."""
+    def test_compile_with_version(self, base_url):
+        """Test compile with version."""
         prompt_content = """
 init do
   @version: 1
@@ -223,13 +223,13 @@ Version 1 content.
 """
         response = httpx.post(
             f"{base_url}/api/compile",
-            json={"prompt": prompt_content, "params": {}, "major": 1},
+            json={"prompt": prompt_content, "params": {}, "version": 1},
             timeout=30.0,
         )
         
         assert response.status_code == 200
         data = response.json()
-        assert data["major"] == 1
+        assert data["version"] == 1
 
 
 if __name__ == "__main__":

@@ -57,7 +57,7 @@ class _Transport:
 
     async def post(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
         """Perform POST request."""
-        return await self._do_request("POST", path, body=body)
+        return await self._do_request("POST", path, json=body)
 
     async def _do_request(
         self, method: str, path: str, **kwargs: Any

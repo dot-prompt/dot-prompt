@@ -48,9 +48,9 @@ Synchronous client wrapper.
 
 - `list_prompts()` - List all available prompts
 - `list_collections()` - List root-level collections
-- `get_schema(prompt, major=None)` - Get prompt schema
-- `compile(prompt, params, seed=None, major=None)` - Compile a prompt
-- `render(prompt, params, runtime, seed=None, major=None)` - Render a prompt
+- `get_schema(prompt)` - Get prompt schema
+- `compile(prompt, params, seed=None, version=None)` - Compile a prompt
+- `render(prompt, params, runtime=None, seed=None, version=None)` - Render a prompt
 - `inject(template, runtime)` - Inject runtime into template
 - `events()` - Stream real-time events
 - `validate_response(response, contract)` - Validate response against contract

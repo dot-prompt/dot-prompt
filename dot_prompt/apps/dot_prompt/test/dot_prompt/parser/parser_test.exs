@@ -98,8 +98,8 @@ defmodule DotPrompt.Parser.ParserTest do
       assert {:ok, ast} = Parser.parse(tokens)
       # fragments: stored in def
       assert ast.init.def[:fragments] == ""
-      # fragment definition stored in fragments
-      assert ast.init.fragments["{my_fragment}"] != nil
+      # fragment definition stored in fragments (braces stripped from key)
+      assert ast.init.fragments["my_fragment"] != nil
     end
 
     test "parses init block with docs: block" do
@@ -171,7 +171,7 @@ defmodule DotPrompt.Parser.ParserTest do
       assert ast.init.def[:def] == ""
       assert ast.init.def[:params] == ""
       assert ast.init.params["@input"] != nil
-      assert ast.init.fragments["{greeting}"] != nil
+      assert ast.init.fragments["greeting"] != nil
       assert ast.init.docs =~ "Documentation"
     end
 
@@ -195,8 +195,8 @@ defmodule DotPrompt.Parser.ParserTest do
       assert ast.init.def[:fragments] == ""
       # Variables stored in params
       assert ast.init.params["@user"] != nil
-      # Fragments stored in fragments
-      assert ast.init.fragments["{myfrag}"] != nil
+      # Fragments stored in fragments (braces stripped from key)
+      assert ast.init.fragments["myfrag"] != nil
     end
 
     test "parses init block with docstrings on variables" do

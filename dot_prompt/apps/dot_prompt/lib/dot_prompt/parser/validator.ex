@@ -119,25 +119,27 @@ defmodule DotPrompt.Parser.Validator do
 
   defp validate_fragments_declared(ast) do
     declared_fragments = parse_fragment_declarations(ast.init) |> Map.keys() |> MapSet.new()
-    used_fragments = extract_fragments_from_body(ast.body, [])
 
-    unknown =
-      Enum.reject(used_fragments, fn raw ->
-        name =
-          raw
-          |> String.trim_leading("{")
-          |> String.trim_leading("{")
-          |> String.trim_trailing("}")
-          |> String.trim_trailing("}")
+    {static_fragments, dynamic_fragments} =
+      extract_fragments_from_body(ast.body, [])
+      |> Enum.reduce({[], []}, fn fragment, {static, dynamic} ->
+        case fragment do
+          {:static, path} -> {[path | static], dynamic}
+          {:dynamic, path} -> {static, [path | dynamic]}
+        end
+      end)
 
+    unknown_static =
+      Enum.reject(static_fragments, fn raw ->
+        name = raw |> String.trim_leading("{") |> String.trim_trailing("}")
         MapSet.member?(declared_fragments, name)
       end)
 
-    if unknown == [] do
+    if unknown_static == [] do
       :ok
     else
       {:error,
-       "unknown_fragment: #{hd(unknown)} referenced but not declared in init block. Inline fragment declarations are no longer supported."}
+       "unknown_fragment: #{hd(unknown_static)} referenced but not declared in init block. Inline fragment declarations are no longer supported."}
     end
   end
 
@@ -145,10 +147,10 @@ defmodule DotPrompt.Parser.Validator do
     Enum.reduce(nodes, acc, fn node, current_acc ->
       case node do
         {:fragment_static, path} ->
-          [path | current_acc]
+          [{:static, path} | current_acc]
 
         {:fragment_dynamic, path} ->
-          [path | current_acc]
+          [{:dynamic, path} | current_acc]
 
         {:if, _var, _cond, then_nodes, elifs, else_node} ->
           branches = [then_nodes | [else_node | Enum.map(elifs, &elem(&1, 1))]]
@@ -290,6 +292,7 @@ defmodule DotPrompt.Parser.Validator do
 
         {:list, str} when is_binary(str) ->
           str = str |> String.trim_leading("[") |> String.trim_trailing("]")
+
           if str == "" do
             []
           else
@@ -567,9 +570,20 @@ defmodule DotPrompt.Parser.Validator do
       # Type can include "from: path" and assembly rules
       {type, from, rules} = parse_fragment_type_and_rules(raw_type)
 
+      # If "from" is specified, it's a static fragment reference (compile-time inline)
+      # Otherwise default to "dynamic" (runtime interpolation)
+      fragment_type =
+        cond do
+          from != nil and from != "" -> "static"
+          type == "" or type == nil -> "dynamic"
+          true -> type
+        end
+
+      source_path = if from, do: from, else: nil
+
       {clean_name,
-       %{type: type, doc: doc}
-       |> maybe_put(:from, from)
+       %{type: fragment_type, doc: doc}
+       |> maybe_put(:from, source_path)
        |> maybe_put(:match, if(is_map(info), do: info[:match], else: nil))
        |> maybe_put(:matchRe, if(is_map(info), do: info[:matchRe] || info[:matchre], else: nil))
        |> maybe_put(:limit, if(is_map(info), do: info[:limit], else: nil))

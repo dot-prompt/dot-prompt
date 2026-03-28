@@ -1,5 +1,6 @@
 """Sync client for dot-prompt container API."""
 
+import asyncio
 from collections.abc import Iterator
 from typing import Any
 
@@ -36,6 +37,8 @@ class DotPromptClient:
             api_key=api_key,
             max_retries=max_retries,
         )
+        self._loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self._loop)
 
     def __enter__(self) -> "DotPromptClient":
         return self
@@ -45,73 +48,80 @@ class DotPromptClient:
 
     def close(self) -> None:
         """Close the client and release resources."""
-        import asyncio
-        asyncio.run(self._async_client.close())
+        self._loop.run_until_complete(self._async_client.close())
+        self._loop.close()
 
     def list_prompts(self) -> list[str]:
         """List all available prompts including fragments."""
-        import asyncio
-        return asyncio.run(self._async_client.list_prompts())
+        return self._loop.run_until_complete(self._async_client.list_prompts())
 
     def list_collections(self) -> list[str]:
         """List root-level prompt collections (directories)."""
-        import asyncio
-        return asyncio.run(self._async_client.list_collections())
+        return self._loop.run_until_complete(self._async_client.list_collections())
 
-    def get_schema(self, prompt: str, major: int | None = None) -> PromptSchema:
+    def get_schema(self, prompt: str) -> PromptSchema:
         """Get schema metadata for a prompt."""
-        import asyncio
-        return asyncio.run(self._async_client.get_schema(prompt, major))
+        return self._loop.run_until_complete(self._async_client.get_schema(prompt))
 
     def compile(
         self,
         prompt: str,
         params: dict[str, Any],
         seed: int | None = None,
-        major: int | None = None,
+        version: int | None = None,
     ) -> CompileResult:
         """Compile a prompt with given parameters."""
-        import asyncio
-        return asyncio.run(self._async_client.compile(prompt, params, seed, major))
+        options = {}
+        if seed is not None:
+            options["seed"] = seed
+        if version is not None:
+            options["version"] = version
+        result = self._loop.run_until_complete(self._async_client.compile(prompt, params, options))
+        return result
 
     def render(
         self,
         prompt: str,
         params: dict[str, Any],
-        runtime: dict[str, Any],
+        runtime: dict[str, Any] | None = None,
         seed: int | None = None,
-        major: int | None = None,
+        version: int | None = None,
     ) -> RenderResult:
         """Compile a prompt and inject runtime data."""
-        import asyncio
-        return asyncio.run(self._async_client.render(prompt, params, runtime, seed, major))
+        options = {}
+        if seed is not None:
+            options["seed"] = seed
+        if version is not None:
+            options["version"] = version
+        result = self._loop.run_until_complete(
+            self._async_client.render(prompt, params, runtime, options)
+        )
+        return RenderResult(**result)
 
-    def inject(self, template: str, runtime: dict[str, Any]) -> InjectResult:
+    def inject(self, template: str, runtime: dict[str, str]) -> InjectResult:
         """Inject runtime variables into a template string."""
-        import asyncio
-        return asyncio.run(self._async_client.inject(template, runtime))
+        result = self._loop.run_until_complete(
+            self._async_client.inject(template, runtime)
+        )
+        return InjectResult(**result)
 
     def events(self) -> Iterator[Event]:
         """Stream real-time container events (sync iterator)."""
-        import asyncio
-
         async def event_generator():
             async for event in self._async_client.events():
                 yield event
 
-        loop = asyncio.new_event_loop()
         try:
             async_gen = event_generator()
             while True:
                 try:
-                    event = loop.run_until_complete(async_gen.__anext__())
+                    event = self._loop.run_until_complete(async_gen.__anext__())
                     yield event
                 except StopAsyncIteration:
                     break
         finally:
-            loop.close()
+            pass
 
     def validate_response(self, response: dict, contract: dict) -> bool:
         """Validate LLM response against a response contract."""
-        import asyncio
-        return asyncio.run(self._async_client.validate_response(response, contract))
+        return self._loop.run_until_complete(self._async_client.validate_response(response, contract))

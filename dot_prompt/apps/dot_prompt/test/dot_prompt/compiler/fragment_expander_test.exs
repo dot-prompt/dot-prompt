@@ -82,13 +82,36 @@ defmodule DotPrompt.Compiler.FragmentExpanderTest do
   end
 
   describe "Dynamic fragment expansion" do
-    test "expands a dynamic fragment" do
-      # Dynamic expand doesn't interpolate, it just returns raw content
-      assert {:ok, iodata, _files_meta} =
-               Dynamic.expand("{{fragments/personalized_greeting}}", %{})
+    test "expands a dynamic fragment from params" do
+      # Dynamic fragments interpolate runtime variables from params
+      params = %{user_history: "Previous conversation:\n- Hello\n- Hi there!"}
+      assert {:ok, content} = Dynamic.expand("{{user_history}}", params)
 
-      text = IO.iodata_to_binary(iodata)
-      assert text =~ "Hello @name!"
+      assert content =~ "Previous conversation:"
+      assert content =~ "Hello"
+      assert content =~ "Hi there!"
+    end
+
+    test "returns error when dynamic fragment variable not in params" do
+      params = %{other_var: "something"}
+      result = Dynamic.expand("{{user_history}}", params)
+
+      assert {:error, error_msg} = result
+      assert error_msg =~ "user_history"
+    end
+
+    test "handles different types of param values" do
+      # String value
+      assert {:ok, "hello world"} = Dynamic.expand("{{greeting}}", %{greeting: "hello world"})
+
+      # Integer value - key as atom
+      assert {:ok, "42"} = Dynamic.expand("{{count}}", %{count: 42})
+
+      # List value - key as atom
+      assert {:ok, "a, b, c"} = Dynamic.expand("{{items}}", %{items: ["a", "b", "c"]})
+
+      # String key
+      assert {:ok, "hello world"} = Dynamic.expand("{{greeting}}", %{"greeting" => "hello world"})
     end
   end
 

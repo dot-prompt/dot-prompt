@@ -16,7 +16,7 @@ def test_list_prompts(client):
     prompts = client.list_prompts()
     print(f"Found {len(prompts)} prompts:")
     for prompt in prompts:
-        print(f"  - {prompt.name}")
+        print(f"  - {prompt}")
     return prompts
 
 
@@ -26,7 +26,7 @@ def test_list_collections(client):
     collections = client.list_collections()
     print(f"Found {len(collections)} collections:")
     for coll in collections:
-        print(f"  - {coll.name}")
+        print(f"  - {coll}")
     return collections
 
 
@@ -63,8 +63,7 @@ def test_render_demo(client):
     try:
         result = client.render(
             "demo",
-            params={"user_level": "advanced", "user_message": "Explain quantum entanglement"},
-            runtime={"user_id": "user-123", "timestamp": "2024-01-01"}
+            params={"user_level": "advanced", "user_message": "Explain quantum entanglement"}
         )
         print(f"Rendered prompt:\n{result.prompt}")
         return result
@@ -79,7 +78,7 @@ def test_fragments(client):
     
     # Test simple_greeting fragment
     try:
-        result = client.compile("simple_greeting", params={})
+        result = client.compile("fragments/simple_greeting", params={})
         print(f"simple_greeting compiled:\n{result.template}")
     except Exception as e:
         print(f"simple_greeting error: {e}")
@@ -87,7 +86,7 @@ def test_fragments(client):
     # Test personalized_greeting fragment
     try:
         result = client.compile(
-            "personalized_greeting",
+            "fragments/personalized_greeting",
             params={"name": "Alice", "service_name": "Acme Corp", "experience": 10, "customer_count": 500}
         )
         print(f"personalized_greeting compiled:\n{result.template}")
@@ -97,7 +96,7 @@ def test_fragments(client):
     # Test conditional_greeting fragment
     try:
         result = client.compile(
-            "conditional_greeting",
+            "fragments/conditional_greeting",
             params={"is_vip": True, "is_member": True, "name": "Bob"}
         )
         print(f"conditional_greeting (VIP) compiled:\n{result.template}")
@@ -107,7 +106,7 @@ def test_fragments(client):
     # Test combined_greeting fragment
     try:
         result = client.compile(
-            "combined_greeting",
+            "fragments/combined_greeting",
             params={
                 "is_vip": False, "is_member": True, "name": "Charlie",
                 "service_name": "TechCo", "experience": 5, "customer_count": 100
@@ -135,8 +134,7 @@ def test_inject(client):
     """Test injecting runtime into a template."""
     print("\n--- Testing inject ---")
     try:
-        template = "Hello {{name}}! Your user ID is {{user_id}}."
-        result = client.inject(template, {"name": "World", "user_id": "12345"})
+        result = client.inject("Hello {{name}}! Your user ID is {{user_id}}.", {"name": "World", "user_id": "12345"})
         print(f"Injected result:\n{result.prompt}")
     except Exception as e:
         print(f"inject error: {e}")
@@ -154,7 +152,7 @@ def main():
             
             # Test schemas for various prompts
             if prompts:
-                for name in ["demo", "all_skills", "simple_greeting"]:
+                for name in ["demo", "all_skills"]:
                     test_get_schema(client, name)
             
             # Test compile and render
