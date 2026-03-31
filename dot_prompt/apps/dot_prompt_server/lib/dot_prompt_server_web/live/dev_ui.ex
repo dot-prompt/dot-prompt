@@ -336,6 +336,7 @@ defmodule DotPromptServerWeb.DevUI do
   defp toolbar(assigns) do
     ~H"""
     <div class="tbar">
+      <span style="font-size: 1.1rem; line-height: 1; margin-right: 6px;">🐱</span>
       <div class="vtog">
         <button 
           phx-click="set_view" 
