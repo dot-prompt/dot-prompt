@@ -109,8 +109,27 @@ func (c *Compiler) resolveNodeWithDepth(node Node, params map[string]interface{}
 		if len(n.Branches) > 0 {
 			return c.resolveNodesWithDepth(n.Branches[0].Then, params, ast, depth)
 		}
+	case MessageNode:
+		return c.resolveMessageNode(n, params, ast, depth)
 	}
 	return ""
+}
+
+// resolveMessageNode resolves a message node with its role
+func (c *Compiler) resolveMessageNode(node MessageNode, params map[string]interface{}, ast *AST, depth int) string {
+	content := c.resolveNodesWithDepth(node.Content, params, ast, depth)
+	
+	// Format based on role
+	switch node.Role {
+	case RoleSystem:
+		return content
+	case RoleUser:
+		return content
+	case RoleContext:
+		return content
+	default:
+		return content
+	}
 }
 
 func (c *Compiler) resolveNodesWithDepth(nodes []Node, params map[string]interface{}, ast *AST, depth int) string {

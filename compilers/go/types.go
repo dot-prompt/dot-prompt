@@ -3,11 +3,11 @@ package dotprompt
 import "fmt"
 
 type ParamSpec struct {
-	Type     string      `json:"type"`
-	Doc      string      `json:"doc,omitempty"`
-	Default  interface{} `json:"default,omitempty"`
-	Lifecycle string     `json:"lifecycle,omitempty"`
-	Vary     bool        `json:"vary,omitempty"`
+	Type      string      `json:"type"`
+	Doc       string      `json:"doc,omitempty"`
+	Default   interface{} `json:"default,omitempty"`
+	Lifecycle string      `json:"lifecycle,omitempty"`
+	Vary      bool        `json:"vary,omitempty"`
 }
 
 type FragmentSpec struct {
@@ -19,6 +19,7 @@ type FragmentSpec struct {
 type PromptSchema struct {
 	Name             string                  `json:"name"`
 	Version          int                     `json:"version"`
+	Role             string                  `json:"role,omitempty"`
 	Description      string                  `json:"description,omitempty"`
 	Mode             string                  `json:"mode,omitempty"`
 	Params           map[string]ParamSpec    `json:"params"`
@@ -90,6 +91,24 @@ type ResponseNode struct {
 }
 
 func (ResponseNode) isNode() {}
+
+// MessageRole represents the role of a message in the prompt
+type MessageRole string
+
+const (
+	RoleSystem  MessageRole = "system"
+	RoleUser    MessageRole = "user"
+	RoleContext MessageRole = "context"
+)
+
+// MessageNode represents a message with a specific role
+type MessageNode struct {
+	Role    MessageRole
+	Content []Node
+	Line    int
+}
+
+func (MessageNode) isNode() {}
 
 type AST struct {
 	Schema PromptSchema

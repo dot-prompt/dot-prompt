@@ -105,3 +105,131 @@ func TestUnhappyPaths(t *testing.T) {
 		}
 	})
 }
+
+// --- Role and Message Section Tests ---
+
+func TestRoleAndMessageSections(t *testing.T) {
+	comp := NewCompiler("")
+
+	t.Run("RoleFieldInInit", func(t *testing.T) {
+		prompt := `init do
+  role: assistant
+end init
+Hello @name!`
+		tokens := Tokenize(prompt)
+		ast, err := Parse(tokens)
+		if err != nil {
+			t.Fatalf("Parse failed: %v", err)
+		}
+		if ast.Schema.Role != "assistant" {
+			t.Errorf("Expected role 'assistant', got %q", ast.Schema.Role)
+		}
+	})
+
+	t.Run("SystemUserContextSections", func(t *testing.T) {
+		prompt := `init do
+end init
+# system
+You are a helpful assistant.
+# user
+Hello @name!
+# context
+The user is from @country.`
+		tokens := Tokenize(prompt)
+		ast, err := Parse(tokens)
+		if err != nil {
+			t.Fatalf("Parse failed: %v", err)
+		}
+		
+		// Check that we have message nodes
+		if len(ast.Body) != 3 {
+			t.Errorf("Expected 3 message nodes, got %d", len(ast.Body))
+		}
+
+		// Check the first node is system
+		if msg, ok := ast.Body[0].(MessageNode); ok {
+			if msg.Role != RoleSystem {
+				t.Errorf("Expected RoleSystem, got %v", msg.Role)
+			}
+		} else {
+			t.Error("First node should be MessageNode")
+		}
+
+		// Check the second node is user
+		if msg, ok := ast.Body[1].(MessageNode); ok {
+			if msg.Role != RoleUser {
+				t.Errorf("Expected RoleUser, got %v", msg.Role)
+			}
+		} else {
+			t.Error("Second node should be MessageNode")
+		}
+
+		// Check the third node is context
+		if msg, ok := ast.Body[2].(MessageNode); ok {
+			if msg.Role != RoleContext {
+				t.Errorf("Expected RoleContext, got %v", msg.Role)
+			}
+		} else {
+			t.Error("Third node should be MessageNode")
+		}
+	})
+
+	t.Run("RoleSectionWithVariables", func(t *testing.T) {
+		prompt := `init do
+end init
+# user
+Hello @name! You are @age years old.`
+		params := map[string]interface{}{"name": "Alice", "age": 30}
+		out, err := comp.CompileString(prompt, params)
+		if err != nil {
+			t.Fatalf("Compile failed: %v", err)
+		}
+		if out != "Hello Alice! You are 30 years old." {
+			t.Errorf("Expected 'Hello Alice! You are 30 years old.', got %q", out)
+		}
+	})
+
+	t.Run("MixedRoleSectionsAndText", func(t *testing.T) {
+		prompt := `init do
+end init
+# system
+You are a calculator.
+# user
+What is @a + @b?
+The answer should be in @format format.`
+		params := map[string]interface{}{"a": 5, "b": 3, "format": "JSON"}
+		out, err := comp.CompileString(prompt, params)
+		if err != nil {
+			t.Fatalf("Compile failed: %v", err)
+		}
+		if !strings.Contains(out, "What is 5 + 3?") {
+			t.Errorf("Expected 'What is 5 + 3?', got %q", out)
+		}
+		if !strings.Contains(out, "JSON format") {
+			t.Errorf("Expected 'JSON format', got %q", out)
+		}
+	})
+
+	t.Run("RoleSectionWithControlFlow", func(t *testing.T) {
+		prompt := `init do
+end init
+# user
+@user_input
+
+if @is_question is true do
+Please answer this question.
+elif @needs_help is true do
+Please help me with this.
+else
+Please proceed normally.
+end if`
+		params := map[string]interface{}{"user_input": "Hello!", "is_question": true, "needs_help": false}
+		out, err := comp.CompileString(prompt, params)
+		if err != nil {
+			t.Fatalf("Compile failed: %v", err)
+		}
+		if !strings.Contains(out, "Please answer this question") {
+			t.Errorf("Expected 'Please answer this question', got %q", out)
+		}
+	})
+}

@@ -24,6 +24,7 @@ const (
 	TokenDoc
 	TokenParamDef
 	TokenFragmentDef
+	TokenRole
 )
 
 type Token struct {
@@ -35,18 +36,19 @@ type Token struct {
 }
 
 var (
-	reBlockStart      = regexp.MustCompile(`^(init|docs|response)\s+do`)
-	reBlockEnd        = regexp.MustCompile(`^end\s*(.*)$`)
-	reIf              = regexp.MustCompile(`^(if|elif)\s+(@\w+)\s*(.*?)\sdo$`)
-	reCaseStart       = regexp.MustCompile(`^case\s+(@\w+)\s+do$`)
-	reVaryStart       = regexp.MustCompile(`^vary\s+(@\w+)\s+do$`)
-	reVarySimpleStart = regexp.MustCompile(`^vary\s+do$`)
-	reFragmentStatic  = regexp.MustCompile(`^\{[\w\-\.\/]+\}$`)
-	reFragmentDynamic = regexp.MustCompile(`^\{\{[\w\-\.\/]+\}\}$`)
-	reParamDef        = regexp.MustCompile(`^(@[\w\d_]+):\s*(.*)$`)
-	reFragmentDef     = regexp.MustCompile(`^(\{{1,2}[\w\-\.\/]+\}{1,2}):\s*(.*)$`)
-	reInitLabel       = regexp.MustCompile(`^(def|params|fragments):\s*(.*)$`)
-	reGenericInitItem = regexp.MustCompile(`^([a-zA-Z0-9_\-\.]+):\s*(.*)$`)
+	reBlockStart       = regexp.MustCompile(`^(init|docs|response)\s+do`)
+	reBlockEnd         = regexp.MustCompile(`^end\s*(.*)$`)
+	reIf               = regexp.MustCompile(`^(if|elif)\s+(@\w+)\s*(.*?)\sdo$`)
+	reCaseStart        = regexp.MustCompile(`^case\s+(@\w+)\s+do$`)
+	reVaryStart        = regexp.MustCompile(`^vary\s+(@\w+)\s+do$`)
+	reVarySimpleStart  = regexp.MustCompile(`^vary\s+do$`)
+	reFragmentStatic   = regexp.MustCompile(`^\{[\w\-\.\/]+\}$`)
+	reFragmentDynamic  = regexp.MustCompile(`^\{\{[\w\-\.\/]+\}\}$`)
+	reParamDef         = regexp.MustCompile(`^(@[\w\d_]+):\s*(.*)$`)
+	reFragmentDef      = regexp.MustCompile(`^(\{{1,2}[\w\-\.\/]+\}{1,2}):\s*(.*)$`)
+	reInitLabel       = regexp.MustCompile(`^(def|params|fragments|role):\s*(.*)$`)
+	reGenericInitItem  = regexp.MustCompile(`^([a-zA-Z0-9_\-\.]+):\s*(.*)$`)
+	reRoleSection      = regexp.MustCompile(`^#\s*(system|user|context)\s*$`)
 )
 
 func Tokenize(content string) []Token {
@@ -83,6 +85,12 @@ func tokenizeLine(line string, lineNo int) []Token {
 	}
 
 	if strings.HasPrefix(trimmed, "#") {
+		// Check if this is a role section marker
+		if reRoleSection.MatchString(trimmed) {
+			match := reRoleSection.FindStringSubmatch(trimmed)
+			tokens = append(tokens, Token{Type: TokenRole, Value: strings.ToLower(match[1]), Line: lineNo, Indent: indent})
+		}
+		// Otherwise it's a comment - don't add any token
 		return tokens
 	}
 

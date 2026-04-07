@@ -15,7 +15,7 @@ func Parse(tokens []Token) (*AST, error) {
 	}
 
 	var err error
-	for i := 0; i < len(tokens); i++ {
+	 for i := 0; i < len(tokens); i++ {
 		token := tokens[i]
 
 		switch token.Type {
@@ -57,6 +57,13 @@ func Parse(tokens []Token) (*AST, error) {
 			ast.Body = append(ast.Body, FragmentNode{Name: strings.Trim(token.Value, "{}"), IsDynamic: true})
 		case TokenText:
 			ast.Body = append(ast.Body, parseLine(token.Value)...)
+		case TokenRole:
+			var node MessageNode
+			node, i, err = parseRoleBlock(tokens, i)
+			if err != nil {
+				return nil, err
+			}
+			ast.Body = append(ast.Body, node)
 		}
 	}
 
@@ -66,7 +73,7 @@ func Parse(tokens []Token) (*AST, error) {
 func parseInitBlock(ast *AST, tokens []Token, start int) (int, error) {
 	section := ""
 	i := start
-	for ; i < len(tokens); i++ {
+	 for ; i < len(tokens); i++ {
 		t := tokens[i]
 		if t.Type == TokenBlockEnd && (t.Value == "init" || t.Value == "") {
 			return i, nil
@@ -79,11 +86,13 @@ func parseInitBlock(ast *AST, tokens []Token, start int) (int, error) {
 			key := t.Value
 			val := t.Meta
 			switch section {
-			case "def":
+			case "def", "":
 				if key == "mode" {
 					ast.Schema.Mode = val
 				} else if key == "match" {
 					ast.Schema.Name = val
+				} else if key == "role" {
+					ast.Schema.Role = val
 				}
 			case "params":
 				ast.Schema.Params[strings.TrimPrefix(key, "@")] = ParamSpec{Type: val}
@@ -104,7 +113,7 @@ func parseInitBlock(ast *AST, tokens []Token, start int) (int, error) {
 func parseDocsBlock(ast *AST, tokens []Token, start int) (int, error) {
 	var builder strings.Builder
 	i := start
-	for ; i < len(tokens); i++ {
+	 for ; i < len(tokens); i++ {
 		t := tokens[i]
 		if t.Type == TokenBlockEnd && (t.Value == "docs" || t.Value == "") {
 			ast.Schema.Docs = builder.String()
@@ -120,7 +129,7 @@ func parseDocsBlock(ast *AST, tokens []Token, start int) (int, error) {
 func parseResponseBlock(ast *AST, tokens []Token, start int) (int, error) {
 	var builder strings.Builder
 	i := start
-	for ; i < len(tokens); i++ {
+	 for ; i < len(tokens); i++ {
 		t := tokens[i]
 		if t.Type == TokenBlockEnd && (t.Value == "response" || t.Value == "") {
 			ast.Body = append(ast.Body, ResponseNode{Content: builder.String(), Line: t.Line})
@@ -133,10 +142,93 @@ func parseResponseBlock(ast *AST, tokens []Token, start int) (int, error) {
 	return i, fmt.Errorf("unexpected EOF: missing end response")
 }
 
+// parseRoleBlock parses a role section like:
+// # system
+// ... content ...
+// # user
+// ... content ...
+func parseRoleBlock(tokens []Token, start int) (MessageNode, int, error) {
+	roleValue := tokens[start].Value
+	var role MessageRole
+	switch strings.ToLower(roleValue) {
+	case "system":
+		role = RoleSystem
+	case "user":
+		role = RoleUser
+	case "context":
+		role = RoleContext
+	default:
+		role = RoleUser
+	}
+
+	node := MessageNode{
+		Role:    role,
+		Content: make([]Node, 0),
+		Line:    tokens[start].Line,
+	}
+
+	i := start + 1
+	 for ; i < len(tokens); i++ {
+		t := tokens[i]
+
+		if t.Type == TokenRole {
+			return node, i - 1, nil
+		}
+
+		switch t.Type {
+		case TokenBlockStart:
+			if t.Value == "response" {
+				var respNode ResponseNode
+				i, _ = parseResponseBlockForRole(tokens, i, &respNode)
+				node.Content = append(node.Content, respNode)
+			}
+		case TokenIf:
+			var ifNode IfChainNode
+			ifNode, i, _ = parseIfChain(tokens, i)
+			node.Content = append(node.Content, ifNode)
+		case TokenCaseStart:
+			var caseNode CaseNode
+			caseNode, i, _ = parseCaseBlock(tokens, i)
+			node.Content = append(node.Content, caseNode)
+		case TokenVaryStart:
+			var varyNode VaryNode
+			varyNode, i, _ = parseVaryBlock(tokens, i)
+			node.Content = append(node.Content, varyNode)
+		case TokenFragmentStatic:
+			node.Content = append(node.Content, FragmentNode{Name: strings.Trim(t.Value, "{}"), IsDynamic: false})
+		case TokenFragmentDynamic:
+			node.Content = append(node.Content, FragmentNode{Name: strings.Trim(t.Value, "{}"), IsDynamic: true})
+		case TokenText:
+			if strings.TrimSpace(t.Value) != "" {
+				node.Content = append(node.Content, parseLine(t.Value)...)
+			}
+		}
+	}
+
+	return node, i - 1, nil
+}
+
+func parseResponseBlockForRole(tokens []Token, start int, node *ResponseNode) (int, error) {
+	var builder strings.Builder
+	i := start
+	 for ; i < len(tokens); i++ {
+		t := tokens[i]
+		if t.Type == TokenBlockEnd && (t.Value == "response" || t.Value == "") {
+			node.Content = builder.String()
+			node.Line = t.Line
+			return i, nil
+		}
+		if t.Type == TokenText {
+			builder.WriteString(t.Value + "\n")
+		}
+	}
+	return i, fmt.Errorf("unexpected EOF: missing end response")
+}
+
 func parseIfChain(tokens []Token, start int) (IfChainNode, int, error) {
 	node := IfChainNode{}
 	node.If = IfBranch{Variable: strings.TrimPrefix(tokens[start].Value, "@"), Condition: tokens[start].Meta}
-	
+
 	i := start + 1
 	content, nextI := collectUntilBoundary(tokens, i, []TokenType{TokenElif, TokenElse, TokenBlockEnd})
 	subAST, err := Parse(content)
@@ -146,7 +238,7 @@ func parseIfChain(tokens []Token, start int) (IfChainNode, int, error) {
 	node.If.Then = subAST.Body
 	i = nextI
 
-	for i < len(tokens) {
+	 for i < len(tokens) {
 		t := tokens[i]
 		if t.Type == TokenElif {
 			branch := IfBranch{Variable: strings.TrimPrefix(t.Value, "@"), Condition: t.Meta}
@@ -180,12 +272,12 @@ func parseIfChain(tokens []Token, start int) (IfChainNode, int, error) {
 func parseCaseBlock(tokens []Token, start int) (CaseNode, int, error) {
 	node := CaseNode{Variable: strings.TrimPrefix(tokens[start].Value, "@")}
 	i := start + 1
-	for i < len(tokens) {
+	 for i < len(tokens) {
 		t := tokens[i]
 		if t.Type == TokenBlockEnd {
 			return node, i, nil
 		}
-		
+
 		if t.Type == TokenInitItem || t.Type == TokenCaseLabel {
 			branch := CaseBranch{ID: t.Value, Label: t.Meta}
 			i++
@@ -199,12 +291,12 @@ func parseCaseBlock(tokens []Token, start int) (CaseNode, int, error) {
 			i = ni
 			continue
 		}
-		
+
 		if t.Type == TokenText && strings.Contains(t.Value, ":") {
 			parts := strings.SplitN(t.Value, ":", 2)
 			branch := CaseBranch{ID: strings.TrimSpace(parts[0]), Label: strings.TrimSpace(parts[1])}
 			i++
-			content, ni := collectUntilBoundary(tokens, i, []TokenType{TokenText, TokenBlockEnd}) 
+			content, ni := collectUntilBoundary(tokens, i, []TokenType{TokenText, TokenBlockEnd})
 			sAST, err := Parse(content)
 			if err != nil {
 				return node, ni, err
@@ -233,12 +325,12 @@ func collectUntilBoundary(tokens []Token, start int, boundaries []TokenType) ([]
 	depth := 0
 	var collected []Token
 	i := start
-	for ; i < len(tokens); i++ {
+	 for ; i < len(tokens); i++ {
 		t := tokens[i]
-		
+
 		isBoundary := false
 		if depth == 0 {
-			for _, b := range boundaries {
+			 for _, b := range boundaries {
 				if t.Type == b {
 					isBoundary = true
 					break
@@ -249,7 +341,7 @@ func collectUntilBoundary(tokens []Token, start int, boundaries []TokenType) ([]
 		if isBoundary {
 			return collected, i
 		}
-		
+
 		if isStartBlock(t.Type) {
 			depth++
 		} else if t.Type == TokenBlockEnd {
@@ -268,11 +360,11 @@ func isStartBlock(t TokenType) bool {
 func parseLine(line string) []Node {
 	var nodes []Node
 	last := 0
-	for i := 0; i < len(line); i++ {
+	 for i := 0; i < len(line); i++ {
 		if line[i] == '@' {
 			start := i
 			i++
-			for i < len(line) && isAlphaNum(line[i]) {
+			 for i < len(line) && isAlphaNum(line[i]) {
 				i++
 			}
 			if i > start+1 {
@@ -291,7 +383,7 @@ func parseLine(line string) []Node {
 				isDynamic = true
 				i++
 			}
-			for i < len(line) && line[i] != '}' {
+			 for i < len(line) && line[i] != '}' {
 				i++
 			}
 			if i < len(line) && line[i] == '}' {
