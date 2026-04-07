@@ -41,7 +41,8 @@ export class DotPromptAsyncClient {
    * @returns Promise<string[]> - A list of prompt names.
    */
   public async listPrompts(): Promise<string[]> {
-    return this.transport.request<string[]>("/api/prompts");
+    const response = await this.transport.request<{prompts: string[]}>("/api/prompts");
+    return response.prompts || [];
   }
 
   /**
@@ -50,7 +51,8 @@ export class DotPromptAsyncClient {
    * @returns Promise<string[]> - A list of collection names.
    */
   public async listCollections(): Promise<string[]> {
-    return this.transport.request<string[]>("/api/collections");
+    const response = await this.transport.request<{collections: string[]}>("/api/collections");
+    return response.collections || [];
   }
 
   /**

@@ -1,0 +1,7 @@
+name = ".prompt"
+grammar = "dot-prompt"
+path_suffixes = ["prompt"]
+line_comments = ["# "]
+tab_size = 2
+hard_tabs = false
+first_line_pattern = "^init\\s+do"

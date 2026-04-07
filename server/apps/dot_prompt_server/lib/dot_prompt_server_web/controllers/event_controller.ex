@@ -29,6 +29,7 @@ defmodule DotPromptServerWeb.EventController do
     receive do
       {:file_change, prompt_name} ->
         data = Jason.encode!(%{type: "file_change", prompt: prompt_name})
+
         case chunk(conn, "data: #{data}\n\n") do
           {:ok, conn} -> stream_events(conn)
           {:error, _} -> conn

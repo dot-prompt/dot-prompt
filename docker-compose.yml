@@ -9,14 +9,14 @@ services:
     ports:
       - "${PROMPT_SERVER_PORT:-4000}:4000"
     volumes:
-      - "${PROMPT_DIR_HOST:-./prompts}:/app/prompts:ro"
+      - "${PROMPT_DIR_HOST:-./server/prompts}:/app/prompts:ro"
     environment:
       - MIX_ENV=prod
       - PORT=4000
       - PROMPTS_DIR=/app/prompts
-      - PHX_HOST=localhost
-      - SECRET_KEY_BASE=dEvSeCrEtKeYBaSeFoRTeStInG12345678901234567890
-      - LIVE_VIEW_SIGNING_SALT=DeVSiGnInGsAlT123456789
+      - PHX_HOST=${PHX_HOST:-localhost}
+      - SECRET_KEY_BASE=${SECRET_KEY_BASE}
+      - LIVE_VIEW_SIGNING_SALT=${LIVE_VIEW_SIGNING_SALT}
       # Remove DISABLE_UI to enable API endpoint
       # - DISABLE_UI=true
     healthcheck:

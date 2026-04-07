@@ -54,12 +54,25 @@ function createApiError(error: unknown, context: string): CompileError {
 }
 
 /**
+ * Sanitize an error object to remove circular references before throwing
+ */
+function sanitizeError(error: unknown): Error {
+  if (error instanceof Error) {
+    // Create a new Error with just the message and name, avoiding circular refs
+    const sanitized = new Error(error.message);
+    sanitized.name = error.name;
+    return sanitized;
+  }
+  return new Error(String(error));
+}
+
+/**
  * Compile a .prompt file by calling the backend API
  */
 export async function compile(
   prompt: string,
   params: Record<string, any> = {},
-  options: { seed?: number; major?: number } = {}
+  options: { seed?: number; major?: number; annotated?: boolean } = {}
 ): Promise<CompileResponse> {
   const config = getServerConfig();
   const request: CompileRequest = {
@@ -96,7 +109,8 @@ export async function compile(
     if (error instanceof Error && error.name === 'AbortError') {
       throw createApiError(new Error('Request timed out'), 'compile');
     }
-    throw createApiError(error, 'compile');
+    // Sanitize error to remove circular references
+    throw createApiError(sanitizeError(error), 'compile');
   }
 }
 
@@ -138,7 +152,8 @@ export async function render(
     if (error instanceof Error && error.name === 'AbortError') {
       throw createApiError(new Error('Request timed out'), 'render');
     }
-    throw createApiError(error, 'render');
+    // Sanitize error to remove circular references
+    throw createApiError(sanitizeError(error), 'render');
   }
 }
 

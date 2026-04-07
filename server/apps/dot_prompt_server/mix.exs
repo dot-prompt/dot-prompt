@@ -49,7 +49,7 @@ defmodule DotPromptServer.MixProject do
       {:jason, "~> 1.2"},
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, "~> 1.5"},
-      {:dot_prompt, in_umbrella: true},
+      {:dot_prompt, path: "../../../compilers/elixir"},
       {:phoenix_live_view, "~> 1.0"},
       {:file_system, "~> 0.2"},
       {:earmark, "~> 1.4"},

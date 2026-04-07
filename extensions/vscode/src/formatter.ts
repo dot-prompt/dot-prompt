@@ -67,7 +67,13 @@ export class DotPromptFormattingProvider implements vscode.DocumentFormattingEdi
             }
 
             if (isWithinRange) {
-                const newText = indentChar.repeat(indentLevel) + text;
+                let currentIndent = indentLevel;
+                // Add extra indentation for -> comments/mappings
+                if (text.startsWith('->')) {
+                    currentIndent++;
+                }
+                
+                const newText = indentChar.repeat(currentIndent) + text;
                 if (newText !== line.text) {
                     edits.push(vscode.TextEdit.replace(new vscode.Range(i, 0, i, line.text.length), newText));
                 }
@@ -103,7 +109,7 @@ export class DotPromptFormattingProvider implements vscode.DocumentFormattingEdi
         if (text.startsWith('@')) return false;
         if (text.startsWith('{')) return false;
         if (text.startsWith('#')) return false;
-        if (/^(init|docs|def|params|fragments|select|match|matchRe|limit|order|if|elif|else|case|vary|end|do)\b/.test(text)) return false;
+        if (/^(init|docs|if|elif|else|case|vary|end|do)\b/.test(text)) return false;
         return /^[^:\s]+:\s*(.*)$/.test(text);
     }
 }

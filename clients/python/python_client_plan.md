@@ -378,5 +378,5 @@ DotPromptError
 5. Response models fully validated via Pydantic v2
 6. Errors map correctly to exception hierarchy
 7. `validate_response()` correctly checks contract compliance
-8. Package installs via `pip install dot-prompt`
+8. Package installs via `pip install dotprompt-client`
 9. Unit tests pass with mocked HTTP responses

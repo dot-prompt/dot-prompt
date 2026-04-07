@@ -99,6 +99,7 @@ defmodule DotPromptServerWeb.DevUI do
        commit_expanded: false,
        commit_version_type: :patch,
        error: nil,
+       highlighter_enabled: true,
        branch_annotations_collapsed: MapSet.new(),
        editing_line: nil,
        telemetry_events: [],
@@ -140,6 +141,7 @@ defmodule DotPromptServerWeb.DevUI do
        commit_expanded: false,
        commit_version_type: :patch,
        error: nil,
+       highlighter_enabled: true,
        branch_annotations_collapsed: MapSet.new(),
        used_vars: MapSet.new(),
        seed: 1,
@@ -148,6 +150,8 @@ defmodule DotPromptServerWeb.DevUI do
        active_schema: nil,
        nav_width: 180,
        params_width: 214,
+       vary_selections: %{},
+       section_popover: nil,
        active_param_dropdown: nil,
        collapsed_folders: MapSet.new()
      )}
@@ -177,6 +181,7 @@ defmodule DotPromptServerWeb.DevUI do
           show_params_pane={@show_params_pane}
           token_breakdown_open={@token_breakdown_open}
           edit_mode={@scratch_edits != nil}
+          highlighter_enabled={@highlighter_enabled}
         />
         
         <%= if @error do %>
@@ -208,7 +213,15 @@ defmodule DotPromptServerWeb.DevUI do
                       <.source_editor content={@source_content} active_file={@active_file} editing_line={@editing_line} />
                     <% else %>
                       <%= if @compiled_content do %>
-                        <%= highlight_compiled_content(@compiled_content, @compile_params, @branch_annotations_collapsed, @vary_selections, @section_popover) %>
+                      <%= if @highlighter_enabled do %>
+                        <div class="markdown-body highlight-mode">
+                          <%= highlight_compiled_content(@compiled_content, @compile_params, @branch_annotations_collapsed, @vary_selections, @section_popover) %>
+                        </div>
+                      <% else %>
+                        <div class="markdown-body clean-md p-4 text-[#dde1e8] leading-relaxed">
+                          <%= @compiled_content |> strip_section_tags() |> Earmark.as_html!() |> raw() %>
+                        </div>
+                      <% end %>
                       <% else %>
                         <div class="cl">
                           <span class="ln">1</span>
@@ -256,6 +269,7 @@ defmodule DotPromptServerWeb.DevUI do
             params_width={@params_width}
             active_param_dropdown={@active_param_dropdown}
             seed={@seed}
+            vary_selections={@vary_selections}
           />
 
           <.token_panel 
@@ -361,6 +375,13 @@ defmodule DotPromptServerWeb.DevUI do
             class={"btn #{if @edit_mode, do: "btn-edit", else: ""}"}
           >
             <%= if @edit_mode, do: "Editing", else: "Edit" %>
+          </button>
+          <button 
+            phx-click="toggle_highlighter" 
+            class={"btn #{if @highlighter_enabled, do: "on", else: ""}"}
+            title="Toggle between annotated source and clean markdown"
+          >
+            Highlighter
           </button>
         <% end %>
         <button 
@@ -492,7 +513,7 @@ defmodule DotPromptServerWeb.DevUI do
         <button class="btn" style="margin-left:auto;padding:3px 7px;font-size:10px" phx-click="toggle_params">‹</button>
       </div>
       <div class="pbody">
-        <div class="pgl">Compile-time</div>
+        <div class="pgl">Compile-time Params</div>
         
         <%= if @active_schema do %>
           <form phx-change="update_compile_param_form">
@@ -502,13 +523,25 @@ defmodule DotPromptServerWeb.DevUI do
                 @active_schema.params 
                 |> Enum.filter(fn {n, s} -> s.lifecycle == :compile && n != "version" end)
                 |> Enum.sort_by(fn {_, s} -> param_sort_weight(s.type) end)
+              
+              vary_names = Map.keys(@vary_selections)
             %>
 
             <%= for {name, spec} <- compile_params do %>
-              <% is_used = MapSet.member?(@used_vars, to_string(name)) %>
-              <div class={"pr #{if !is_used, do: "opacity-40 transition-opacity"}"}>
+              <% 
+                is_used = MapSet.member?(@used_vars, to_string(name)) 
+                is_vary = spec[:vary] == true or to_string(name) in vary_names or ("@" <> to_string(name)) in vary_names
+                vary_data = if is_vary, do: Map.get(@vary_selections, to_string(name)) || Map.get(@vary_selections, "@" <> to_string(name))
+                selection_id = if is_map(vary_data), do: vary_data.id, else: vary_data
+              %>
+              <div class={"pr #{if !is_used, do: "opacity-40 grayscale transition-all duration-300", else: ""}"}>
                 <div class="plbl">
-                  <span class="pn" title={"@#{name}"}>@<%= name %></span>
+                  <div class="flex items-center gap-1.5">
+                    <span class="pn" title={"@#{name}"}><%= if !is_used, do: "👻 " %>@<%= name %></span>
+                    <%= if is_vary do %>
+                      <span class="px-1 py-0.5 rounded-[2px] bg-purple-500/20 text-purple-400 text-[8px] font-bold uppercase tracking-wider border border-purple-500/30" title={"Vary selection: #{selection_id}"}>vary</span>
+                    <% end %>
+                  </div>
                   <span class="pt"><%= spec.type %></span>
                 </div>                
                 
@@ -609,15 +642,6 @@ defmodule DotPromptServerWeb.DevUI do
                 <% end %>
               </div>
             <% end %>
-
-            <button 
-              type="button"
-              class="btn btn-gr w-full" 
-              style="margin-top:10px" 
-              disabled={@is_compiling}
-            >
-              <%= if @is_compiling, do: "Compiling...", else: "Auto-compiled" %>
-            </button>
           </form>
 
           <div class="pdiv"></div>
@@ -626,9 +650,15 @@ defmodule DotPromptServerWeb.DevUI do
           <% runtime_params = Enum.filter(@active_schema.params, fn {n, s} -> s.lifecycle == :runtime && n != "version" end) %>
 
           <%= for {name, spec} <- runtime_params do %>
-            <div class="pr">
+            <% is_used = MapSet.member?(@used_vars, to_string(name)) %>
+            <div class={"pr #{if !is_used, do: "opacity-40 grayscale transition-all duration-300", else: ""}"}>
               <div class="plbl">
-                <span class="pn" title={"@#{name}"}>@<%= name %></span>
+                <div class="flex items-center gap-1.5">
+                  <span class="pn" title={"@#{name}"}><%= if !is_used, do: "👻 " %>@<%= name %></span>
+                  <%= if spec[:vary] == true do %>
+                    <span class="px-1 py-0.5 rounded-[2px] bg-purple-500/20 text-purple-400 text-[8px] font-bold uppercase tracking-wider border border-purple-500/30">vary</span>
+                  <% end %>
+                </div>
                 <span class="pt"><%= spec.type %></span>
               </div>
               <input
@@ -1049,7 +1079,7 @@ defmodule DotPromptServerWeb.DevUI do
         <span class="msec-chev #{if !is_collapsed, do: "open"}">›</span>
         #{popover_html}
       </div>
-      <div class="msec-content#{if is_collapsed, do: " collapsed"}">
+      <div class="msec-content markdown-body#{if is_collapsed, do: " collapsed"}" style="padding: 0; background: transparent;">
         #{rendered_content}
       </div>
     </div>
@@ -1058,7 +1088,7 @@ defmodule DotPromptServerWeb.DevUI do
 
   defp render_content_with_earmark(content, compile_params, vary_selections) do
     case Earmark.as_html(content) do
-      {:ok, %DotPrompt.Result{prompt: html}} ->
+      {:ok, html, _} ->
         html
         |> mark_params(compile_params)
         |> mark_runtime_vars()
@@ -1114,6 +1144,10 @@ defmodule DotPromptServerWeb.DevUI do
 
   def handle_event("toggle_token_breakdown", _, socket) do
     {:noreply, assign(socket, token_breakdown_open: !socket.assigns.token_breakdown_open)}
+  end
+
+  def handle_event("toggle_highlighter", _, socket) do
+    {:noreply, assign(socket, highlighter_enabled: !socket.assigns.highlighter_enabled)}
   end
 
   def handle_event("toggle_folder", %{"folder" => folder}, socket) do
@@ -1285,6 +1319,7 @@ defmodule DotPromptServerWeb.DevUI do
        vary_selections: %{},
        view_mode: :source,
        error: nil,
+       highlighter_enabled: true,
        editing_line: nil,
        active_schema: active_schema,
        compile_params: compile_params
@@ -1649,6 +1684,8 @@ defmodule DotPromptServerWeb.DevUI do
               active_param_dropdown: nil,
               error: error_msg,
               is_compiling: false,
+              vary_selections: %{},
+              section_popover: nil,
               seed: nil
             )
 
@@ -1920,4 +1957,12 @@ defmodule DotPromptServerWeb.DevUI do
     <% end %>
     """
   end
+
+  defp strip_section_tags(text) when is_binary(text) do
+    text
+    |> String.replace(~r/\[\[section:.*?\]\]\n?/s, "")
+    |> String.replace(~r/\[\[\/section\]\]\n?/s, "")
+  end
+
+  defp strip_section_tags(text), do: text
 end

@@ -1,4 +1,0 @@
-# DotPrompt
-
-**TODO: Add description**
-

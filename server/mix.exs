@@ -11,7 +11,6 @@ defmodule DotPromptUmbrella.MixProject do
       releases: [
         dot_prompt_umbrella: [
           applications: [
-            dot_prompt: :permanent,
             dot_prompt_server: :permanent
           ]
         ]

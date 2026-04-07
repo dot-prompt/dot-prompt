@@ -137,7 +137,7 @@ export async function openCompiledViewCommand(
   }
 
   // Get extension URI for webview
-  const extension = vscode.extensions.getExtension('dot-prompt.dot-prompt');
+  const extension = vscode.extensions.getExtension('dotprompt.dotpromptai');
   if (!extension) {
     vscode.window.showErrorMessage('Extension not found');
     return;

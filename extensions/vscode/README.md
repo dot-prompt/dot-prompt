@@ -1,123 +1,169 @@
-<!-- fullWidth: false tocVisible: false tableWrap: true -->
-# dot-prompt VS Code Extension
+# .prompt — Structured Prompts for LLMs
 
-A server-backed VS Code extension for `.prompt` files with compiled view webview.
+Author `.prompt` files — a small domain-specific language for writing structured, reusable LLM prompts with variables, conditionals, and branches. The extension compiles them to clean, flat strings ready to send to any model.
 
-## Features
-
-- **Server-backed Compilation**: Uses the existing Phoenix backend API (`/api/compile`) for compilation
-- **Compiled View Webview**: Display compiled output with syntax highlighting, token counts, cache status
-- **Inline Editor Features**:
-  - Hover provider showing compiled preview
-  - Diagnostic provider for validation errors
-  - CodeLens for quick actions
+---
 
 ## Requirements
 
-- VS Code 1.75.0 or later
-- Phoenix backend server running (default: http://localhost:4000)
+This extension requires the **dot-prompt runtime** running locally. The runtime is a Phoenix server distributed as a Docker image.
 
-## Installation
-
-1. Navigate to the extension directory:
-
-   ```bash
-   cd dot-prompt_vscode
-```
-2. Install dependencies:
-
-   ```bash
-   npm install
-```
-3. Compile the TypeScript:
-
-   ```bash
-   npm run compile
-```
-4. Open the extension in VS Code and press F5 to run the development version
-
-## Configuration
-
-The extension provides the following settings (accessible via File > Preferences > Settings):
-
-| Setting                | Default               | Description                                 |
-| ---------------------- | --------------------- | ------------------------------------------- |
-| `dotPrompt.serverUrl`  | `http://localhost:4000` | URL of the dot-prompt Phoenix server        |
-| `dotPrompt.autoCompile` | `true`                | Automatically compile .prompt files on save |
-| `dotPrompt.compileDelay` | `300`                 | Delay in milliseconds before auto-compile   |
-
-## Usage
-
-### Opening a .prompt File
-
-1. Open any `.prompt` file in VS Code
-2. The extension will automatically compile it if `autoCompile` is enabled
-
-### Commands
-
-- **dot-prompt: Compile** - Manually compile the current .prompt file
-- **dot-prompt: Open Compiled View** - Open the compiled view webview panel
-
-### Keyboard Shortcuts
-
-You can bind keyboard shortcuts in VS Code:
-
-```json
-{
-  "key": "ctrl+shift+p",
-  "command": "dot-prompt.compile",
-  "when": "editorLangId == prompt"
-}
-```
-
-### Compiled View Webview
-
-The compiled view displays:
-
-- Full compiled template with syntax highlighting
-- Token count and cache status
-- Vary selections (if any)
-- Response contract display
-- Warnings (if any)
-
-### Inline Features
-
-- **Hover**: Hover over a .prompt file to see a quick summary (tokens, cache status, vary selections)
-- **Diagnostics**: Compilation errors and warnings are shown in the Problems panel
-- **CodeLens**: Quick action buttons at the top of the file
-
-## Architecture
-
-```
-VS Code Extension ──► Phoenix Backend API ──► Compiled Output
-       │                                         │
-       ├─► Webview Panel                         │
-       ├─► Hover Provider                        │
-       ├─► Diagnostics                          │
-       └─► CodeLens                              │
-```
-
-## API Endpoints Used
-
-| Endpoint     | Method | Purpose                     |
-| ------------ | ------ | --------------------------- |
-| `/api/compile` | POST   | Compile .prompt with params |
-| `/api/render` | POST   | Render compiled template    |
-
-## Development
-
-### Building
+**Start it before using the extension:**
 
 ```bash
-npm run compile
+docker run -d --name dotprompt -p 4040:4040 dotprompt/runtime-dev:latest
 ```
 
-### Testing
+Or with docker-compose if you have the `dot_prompt` project cloned:
 
 ```bash
-npm run test
+docker-compose up -d
 ```
 
-## License
+The server runs on `http://localhost:4040`. The extension connects to it automatically.
 
-MIT
+> Don't have Docker? [Get Docker →](https://docs.docker.com/get-docker/)
+
+---
+
+## Getting Started
+
+1. **Start the runtime** (see above)
+2. **Install this extension** from the VS Code marketplace
+3. **Create a file** with a `.prompt` extension
+4. **Open the Command Palette** (`F1`) and run `.prompt: Compile`
+
+That's it. The compiled output appears in a side panel.
+
+---
+
+## The .prompt Language
+
+A `.prompt` file has two parts: an `init` block that declares your prompt's metadata and parameters, and a body that uses those parameters to produce text.
+
+### A minimal example
+
+```
+init do
+  @version: 1
+
+  def:
+    mode: assistant
+    description: A greeting prompt
+
+  params:
+    @name: str = World        -> name to greet
+    @style: enum[formal, casual] = casual  -> greeting style
+
+end init
+
+vary @style do
+formal: Good day, @name.
+casual: Hey @name!
+end @style
+```
+
+Compiled with `@name: Alice`, `@style: casual` → `Hey Alice!`
+
+---
+
+## Language Features
+
+### Parameters
+
+Declare inputs in the `params` block. All variables are prefixed with `@`.
+
+```
+@name: str = World               # string with default
+@count: int[1..10] = 5          # integer with range
+@active: bool = true             # boolean
+@role: enum[admin, user] = user  # enum
+```
+
+Parameters with no default are **required** at compile time.
+
+### Conditionals
+
+```
+if @active is true do
+Welcome back!
+elif @role is admin do
+Admin panel access granted.
+else
+Please log in.
+end @active
+```
+
+### Case — deterministic branching
+
+```
+case @language do
+en: Hello!
+es: Hola!
+fr: Bonjour!
+end @language
+```
+
+### Vary — random branching
+
+Use `vary` to randomise between options at runtime (requires an `enum` param):
+
+```
+vary @tone do
+formal: I am pleased to assist you.
+casual: Happy to help!
+end @tone
+```
+
+### Fragments
+
+Pull in content from other `.prompt` files:
+
+```
+{skills}: static from: skills    # cached, matched by name
+  match: @skill_names
+{{history}}: dynamic              # fetched fresh each request
+```
+
+### Comments
+
+Lines starting with `#` are stripped at compile time and never sent to the model.
+
+---
+
+## Commands
+
+| Command | Description |
+|---|---|
+| `.prompt: Compile` | Compile the current file |
+| `.prompt: Open Compiled View` | Open the compiled output panel |
+
+---
+
+## Settings
+
+| Setting | Default | Description |
+|---|---|---|
+| `dotPrompt.serverUrl` | `http://localhost:4040` | Runtime server URL |
+| `dotPrompt.autoCompile` | `true` | Compile automatically on save |
+
+---
+
+## Troubleshooting
+
+**Extension not connecting to the server**
+- Confirm Docker is running: `docker ps`
+- Test the runtime directly: `curl http://localhost:4040`
+- If you're using a different port, update `dotPrompt.serverUrl` in settings
+
+**Extension not activating**
+- Make sure your file has a `.prompt` extension
+- Reload VS Code: `F1` → *Developer: Reload Window*
+
+---
+
+## Learn More
+
+- [Full Language Reference](https://dotprompt.run/docs) — complete syntax documentation
+- [dotprompt.run](https://dotprompt.run) — project home
+````

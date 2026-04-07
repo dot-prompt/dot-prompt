@@ -1,0 +1,14 @@
+id = "dot-prompt"
+name = "DotPrompt"
+description = "Language support for .prompt files with server-backed compilation, diagnostics, hover, and formatting"
+version = "0.1.0"
+schema_version = 1
+authors = ["DotPrompt Contributors"]
+repository = "https://github.com/dot-prompt/dotprompt"
+
+[grammars.dot-prompt]
+repository = "file://./grammars/dot-prompt"
+
+[language_servers.dot-prompt-lsp]
+name = "dot-prompt-lsp"
+languages = [".prompt"]

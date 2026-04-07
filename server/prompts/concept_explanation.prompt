@@ -5,27 +5,27 @@ init do
   mode: explanation
   description: Teacher mode — explanation phase with dynamic depth control.
 
-    params:
-    @skill_names: list[Milton Model, Meta Model, Anchoring, Reframing]
-    -> skills to load, must match declared skills in skills collection
+  params:
+    @skill_names: list[Milton Model, Meta Model, Anchoring, Reframing] = Reframing
+      -> skills to load, must match declared skills in skills collection
     @pattern_step: int[1..3] = 1 -> current step in the teaching sequence
     @variation: enum[analogy, recognition, story]
-    -> teaching track selected for the session
+      -> teaching track selected for the session
     @answer_depth: enum[shallow, medium, deep] = medium -> depth of question answers
     @if_input_mode_question: bool = false -> true when user has asked a question
     @user_message: str -> the user's current message
     @user_level: enum[beginner, intermediate, advanced] = intermediate -> user experience level
     @intro_style: enum[formal, curious]
-    -> opening variation selected by runtime
+      -> opening variation selected by runtime
     @closing_style: enum[exercise, reflection]
-    -> closing variation selected by runtime
+      -> closing variation selected by runtime
 
-    fragments:
+  fragments:
     {skill_context}: static from: skills
-    match: @skill_names
-    -> loads and composites all matching skill definitions
+      match: @skill_names
+      -> loads and composites all matching skill definitions
     {{user_history}}: dynamic
-    -> recent conversation history for context
+      -> recent conversation history for context
 
     docs do
       Teaches NLP skills using a structured multi-turn pattern.

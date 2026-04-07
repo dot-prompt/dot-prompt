@@ -1,30 +1,62 @@
-# dot-prompt-ts
+# @dotprompt/client
 
-TypeScript client for the [dot-prompt](https://github.com/dot-prompt) container API.
+TypeScript client for [dotprompt](https://dotprompt.run) — a compiled language for LLM prompts.
 
-## Features
+[![npm](https://img.shields.io/npm/v/@dotprompt/client)](https://www.npmjs.com/package/@dotprompt/client)
+[![Node Versions](https://img.shields.io/node/v/@dotprompt/client)](https://www.npmjs.com/package/@dotprompt/client)
+[![License](https://img.shields.io/npm/l/@dotprompt/client)](https://github.com/dot-prompt/dot-prompt/blob/main/LICENSE)
 
-- **Async-first API**: Primary client designed for modern TS/JS environments.
-- **Strong runtime validation**: Every response is validated using **Zod**.
-- **SSE streaming**: Native async generator for server-sent events.
-- **Contract-aware validation**: Validate LLM responses against prompt contracts.
-- **Node-friendly**: Built-in support for Node.js 18+ with zero external fetch dependencies.
+---
+
+## What This Is
+
+@dotprompt/client connects your TypeScript application to the dotprompt container. The container compiles `.prompt` files — a domain-specific language where branching, fragments, and contracts resolve at compile time. Your LLM receives only the final, flat prompt string with zero logic residue.
+
+**Requires:** [dotprompt/runtime](https://hub.docker.com/r/dotprompt/runtime) or [dotprompt/runtime-dev](https://hub.docker.com/r/dotprompt/runtime-dev) Docker container.
+
+**Website:** [dotprompt.run](https://dotprompt.run)  
+**Documentation:** [dotprompt.run/docs](https://dotprompt.run/docs)  
+**GitHub:** [github.com/dot-prompt/dot-prompt](https://github.com/dot-prompt/dot-prompt)
+
+---
+
+- **Async-first API** — designed for modern TypeScript/JavaScript environments
+- **Full type safety** — every response validated with **Zod**
+- **SSE streaming** — native async generator for real-time events
+- **Contract validation** — validate LLM responses against prompt contracts
+- **Zero dependencies** — Node.js 18+ with built-in fetch
+
+---
 
 ## Installation
 
 ```bash
-npm install dot-prompt
+npm install @dotprompt/client
 ```
 
-## Usage
+---
 
-### Basic Example
+## Prerequisites
 
-```ts
-import { DotPromptClient } from 'dot-prompt';
+Run the dotprompt container:
+
+```bash
+docker run -v ./prompts:/app/prompts \
+  -p 4000:4000 \
+  dotprompt/runtime
+```
+
+The API runs at `http://localhost:4000` by default.
+
+---
+
+## Quick Start
+
+```typescript
+import { DotPromptClient } from '@dotprompt/client';
 
 const client = new DotPromptClient({
-  baseUrl: 'http://localhost:4041',
+  baseUrl: 'http://localhost:4000',
   timeout: 5000,
 });
 
@@ -35,72 +67,198 @@ const result = await client.compile('my_prompt', {
 console.log(result.template);
 ```
 
-### Full Render (Compile + Inject)
+---
 
-```ts
-const result = await client.render('my_prompt', {
-  name: 'World',
-}, {
-  user_id: '123',
-});
+## Full Example: Compile + Render + Validate
 
-console.log(result.prompt);
+```typescript
+import { DotPromptClient } from '@dotprompt/client';
+
+const client = new DotPromptClient({ baseUrl: 'http://localhost:4041' });
+
+// Get prompt schema (parameters, types, contracts)
+const schema = await client.getSchema('teaching_prompt');
+console.log('Params:', schema.params);
+
+// Compile: resolve branching, expand fragments, select variations
+const compiled = await client.compile('teaching_prompt', {
+  pattern_step: 2,
+  variation: 'recognition',
+  answer_depth: 'medium',
+  skill_names: ['Milton Model'],
+}, { seed: 42 }); // deterministic variation selection
+
+console.log('Template:', compiled.template);
+
+// Render: inject runtime variables into the template
+const rendered = await client.render('teaching_prompt',
+  {
+    pattern_step: 2,
+    variation: 'recognition',
+    answer_depth: 'medium',
+    skill_names: ['Milton Model'],
+  },
+  {
+    user_input: 'Can you give me an example?',
+    user_level: 'intermediate',
+  }
+);
+
+console.log('Final prompt:', rendered.prompt);
+
+// Validate LLM response against the contract
+const response = { score: 8, explanation: 'Good answer' };
+const isValid = client.validateResponse(response, schema.responseContract);
+console.log('Valid:', isValid);
 ```
 
-### SSE Events
+---
 
-```ts
-for await (const event of client.events()) {
-  if (event.type === 'committed') {
-    console.log('Prompt committed:', event.payload);
+## Configuration
+
+```typescript
+import { DotPromptClient } from '@dotprompt/client';
+
+const client = new DotPromptClient({
+  baseUrl: 'http://localhost:4041',  // container URL
+  apiKey: 'your-api-key',            // optional API key
+  timeout: 5000,                     // request timeout in ms
+  maxRetries: 3,                    // retry on transient failures
+});
+```
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DOTPROMPT_URL` | `http://localhost:4000` | Container URL |
+| `DOTPROMPT_API_KEY` | — | Optional API key |
+| `DOTPROMPT_TIMEOUT` | `5000` | Request timeout in ms |
+
+---
+
+## API Reference
+
+### Constructor Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `baseUrl` | `string` | `http://localhost:4041` | Container URL |
+| `apiKey` | `string` | — | Optional API key |
+| `timeout` | `number` | `5000` | Request timeout in ms |
+| `maxRetries` | `number` | `3` | Retry attempts |
+
+### Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `listPrompts()` | `Promise<PromptSchema[]>` | All available prompts |
+| `listCollections()` | `Promise<Collection[]>` | Root-level collections |
+| `getSchema(prompt)` | `Promise<PromptSchema>` | Prompt metadata + params |
+| `compile(prompt, params, options?)` | `Promise<CompileResult>` | Resolve branching, expand fragments |
+| `render(prompt, params, runtime?, options?)` | `Promise<RenderResult>` | Full compile + inject |
+| `inject(template, runtime)` | `InjectResult` | Inject into raw template |
+| `events()` | `AsyncGenerator<ServerEvent>` | SSE stream for real-time updates |
+| `validateResponse(response, contract)` | `boolean` | Validate against contract |
+
+---
+
+## Error Handling
+
+```typescript
+import {
+  DotPromptClient,
+  ConnectionError,
+  TimeoutError,
+  PromptNotFoundError,
+  ValidationError,
+  ServerError,
+} from '@dotprompt/client';
+
+try {
+  const result = await client.compile('my_prompt', { ... });
+} catch (error) {
+  if (error instanceof PromptNotFoundError) {
+    console.error("Prompt doesn't exist");
+  } else if (error instanceof ValidationError) {
+    console.error('Contract mismatch:', error.message);
+  } else if (error instanceof ConnectionError) {
+    console.error('Container unreachable');
+  } else if (error instanceof TimeoutError) {
+    console.error('Request timed out');
+  } else if (error instanceof ServerError) {
+    console.error('Server error:', error.message);
   }
 }
 ```
 
-### Contract Validation
+### Error Types
 
-```ts
-const isValid = client.validateResponse(
-  { score: 10, explain: "Good" },
-  { 
-    fields: { 
-      score: { type: "number" }, 
-      explain: { type: "string" } 
-    }, 
-    compatible: true 
+| Error | Description |
+|-------|-------------|
+| `ConnectionError` | Network or server reachability issues |
+| `TimeoutError` | Request timed out |
+| `PromptNotFoundError` | 404 — prompt doesn't exist |
+| `APIClientError` | Other 4xx client errors |
+| `ServerError` | 5xx server errors |
+| `ValidationError` | Zod or contract validation failures |
+
+---
+
+## Async Generator: SSE Events
+
+```typescript
+for await (const event of client.events()) {
+  switch (event.type) {
+    case 'committed':
+      console.log('Prompt committed:', event.payload);
+      break;
+    case 'compiled':
+      console.log('Prompt compiled:', event.payload);
+      break;
+    case 'error':
+      console.error('Error:', event.payload);
+      break;
   }
-);
+}
 ```
 
-## API
+---
 
-### Constructor `DotPromptAsyncClient` / `DotPromptClient`
+## Example `.prompt` File
 
-- `baseUrl`: Default `http://localhost:4041` (env: `DOTPROMPT_URL`)
-- `apiKey`: Optional API key (env: `DOTPROMPT_API_KEY`)
-- `timeout`: Request timeout in ms (env: `DOTPROMPT_TIMEOUT`)
-- `maxRetries`: Maximum retry attempts for failed requests.
+This is what the container compiles from:
 
-### Methods
+```prompt
+init do
+  @major: 1
 
-- `listPrompts()`: List all available prompts.
-- `listCollections()`: List all prompt collections.
-- `getSchema(prompt: string, version?: number)`: Get prompt metadata and parameter schema.
-- `compile(prompt, params, options)`: Prepare a prompt template.
-- `render(prompt, params, runtime, options)`: Full template preparation + data injection.
-- `inject(template, runtime)`: Inject runtime data into a raw template string.
-- `validateResponse(response, contract)`: Validate data against a response contract.
-- `events()`: Access the SSE stream as an async generator.
+  params:
+    @name: str -> user's name
+    @mode: enum[formal, casual] = casual -> communication style
 
-## Error Handling
+  fragments:
+    {greeting}: static from: greetings
+      match: @mode
 
-- `ConnectionError`: Network or server reachability issues.
-- `TimeoutError`: Request timed out.
-- `PromptNotFoundError`: 404 from the server.
-- `APIClientError`: Other 4xx client errors.
-- `ServerError`: 5xx server errors.
-- `ValidationError`: Zod or contract validation failures.
+end init
+
+case @mode do
+formal: Dear @name, welcome to our service.
+casual: Hey @name! Great to see you.
+end @mode
+```
+
+Into this clean string for your LLM:
+
+```
+Dear Sarah, welcome to our service.
+```
+
+No branching logic. No fragment references. Just the instruction.
+
+---
 
 ## License
 
-Apache 2.0
+Apache 2.0 — see [LICENSE](https://github.com/dot-prompt/dot-prompt/blob/main/LICENSE)

@@ -91,7 +91,7 @@ func (t *Transport) request(ctx context.Context, method, path string, body any) 
 		defer resp.Body.Close()
 
 		if resp.StatusCode >= 400 {
-			return nil, t.handleError(resp)
+			return nil, t.handleError(resp, path)
 		}
 
 		var result map[string]any
@@ -104,19 +104,16 @@ func (t *Transport) request(ctx context.Context, method, path string, body any) 
 	return nil, fmt.Errorf("request failed after %d attempts: %w", t.maxRetries+1, lastErr)
 }
 
-func (t *Transport) handleError(resp *http.Response) error {
+func (t *Transport) handleError(resp *http.Response, path string) error {
 	status := resp.StatusCode
 	body, _ := io.ReadAll(resp.Body)
 	message := string(body)
 
-	var errType string
 	var errMsg string
 	if len(body) > 0 {
 		var errData map[string]any
 		if json.Unmarshal(body, &errData) == nil {
-			if v, ok := errData["error"].(string); ok {
-				errType = v
-			}
+
 			if v, ok := errData["message"].(string); ok {
 				errMsg = v
 			}
@@ -162,7 +159,7 @@ func (t *Transport) stream(ctx context.Context, path string) (*http.Response, er
 	}
 
 	if resp.StatusCode >= 400 {
-		return nil, t.handleError(resp)
+		return nil, t.handleError(resp, path)
 	}
 
 	return resp, nil

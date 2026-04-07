@@ -1,0 +1,39 @@
+{
+  "name": "tree-sitter-dot-prompt",
+  "version": "0.1.0",
+  "description": "Tree-sitter grammar for .prompt files",
+  "main": "bindings/node",
+  "keywords": ["incremental", "parsing", "tree-sitter", "dot-prompt"],
+  "files": ["grammar.js", "bindings/node", "src/**"],
+  "author": "DotPrompt Contributors",
+  "license": "MIT",
+  "dependencies": {
+    "node-addon-api": "^7.1.0",
+    "node-gyp-build": "^4.8.0"
+  },
+  "peerDependencies": {
+    "tree-sitter": "^0.21.0"
+  },
+  "peerDependenciesMeta": {
+    "tree_sitter": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "tree-sitter-cli": "^0.22.0",
+    "prebuildify": "^6.0.0"
+  },
+  "scripts": {
+    "build": "tree-sitter generate && node-gyp build",
+    "test": "tree-sitter test",
+    "prebuildify": "prebuildify --napi --strip"
+  },
+  "tree-sitter": [
+    {
+      "scope": "source.prompt",
+      "file-types": ["prompt"],
+      "highlights": "queries/highlights.scm",
+      "injection-regex": "^(dot-)?prompt$"
+    }
+  ]
+}

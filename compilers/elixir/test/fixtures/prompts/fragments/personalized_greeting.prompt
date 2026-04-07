@@ -6,4 +6,4 @@ init do
   params:
     @name: string
 end init
-Hello, {{name}}!
+Hello, @name!

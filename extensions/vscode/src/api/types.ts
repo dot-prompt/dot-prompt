@@ -12,6 +12,7 @@ export interface CompileResponse {
   params?: Record<string, ParamMeta>;
   major?: number;
   version?: number | string;
+  used_vars?: string[];
 }
 
 export interface ParamMeta {
@@ -35,6 +36,7 @@ export interface CompileRequest {
   params: Record<string, any>;
   seed?: number;
   major?: number;
+  annotated?: boolean;
 }
 
 export interface RenderResponse {

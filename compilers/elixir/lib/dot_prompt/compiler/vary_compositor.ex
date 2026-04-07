@@ -48,14 +48,17 @@ defmodule DotPrompt.Compiler.VaryCompositor do
 
   defp pre_calculate_selections(vary_map, seed, params) do
     Enum.into(vary_map, %{}, fn {name, branches} ->
+      clean_name = String.trim_leading(to_string(name), "@")
+      atom_name = to_existing_or_nil(clean_name)
+
       selection =
         cond do
           # Param match
           # Try multiple key formats for maximum compatibility (@name string, name string, name atom)
           (val =
              Map.get(params, name) ||
-               Map.get(params, String.trim_leading(to_string(name), "@")) ||
-               Map.get(params, String.to_existing_atom(String.trim_leading(to_string(name), "@")))) !=
+               Map.get(params, clean_name) ||
+               (atom_name && Map.get(params, atom_name))) !=
               nil ->
             target = to_string(val)
             match = Enum.find(branches, fn {id, _, _} -> to_string(id) == target end)
@@ -75,6 +78,14 @@ defmodule DotPrompt.Compiler.VaryCompositor do
   end
 
   defp match_to_selection({id, _label, text}), do: {id, maybe_render_tokens(text)}
+
+  defp to_existing_or_nil(s) do
+    try do
+      String.to_existing_atom(s)
+    rescue
+      ArgumentError -> nil
+    end
+  end
 
   defp select_branch(branches, seed) when is_integer(seed) do
     # Stable ordering and hashing for deterministic selection

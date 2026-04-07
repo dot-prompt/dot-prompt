@@ -4,9 +4,10 @@ defmodule DotPrompt.Compiler.FragmentExpander.Dynamic do
   Dynamic fragments are NOT cached - they're evaluated fresh each request.
   """
 
-  @spec expand(String.t(), map()) :: {:ok, String.t()} | {:error, String.t()}
+  @spec expand(String.t(), map()) :: {:ok, String.t(), MapSet.t(), map()} | {:error, String.t()}
   def expand(fragment_path, params) do
     var_name = String.trim(fragment_path, "{") |> String.trim("}")
+    used = MapSet.new([var_name])
 
     # Try string key first (from JSON/API), then atom key (Elixir maps)
     value =
@@ -27,13 +28,13 @@ defmodule DotPrompt.Compiler.FragmentExpander.Dynamic do
 
     case value do
       nil ->
-        {:error, "variable #{var_name} not found in params"}
+        {:error, "dynamic_fragment_variable_not_found: #{var_name}"}
 
       v when is_list(v) ->
-        {:ok, Enum.join(v, ", ")}
+        {:ok, Enum.join(v, ", "), used, %{}}
 
       v ->
-        {:ok, to_string(v)}
+        {:ok, to_string(v), used, %{}}
     end
   end
 end

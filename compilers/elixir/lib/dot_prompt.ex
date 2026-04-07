@@ -829,8 +829,31 @@ defmodule DotPrompt do
     vars_in_text = Regex.scan(~r/@(\w+)/, text, capture: :all_but_first) |> List.flatten()
     new_vars = Enum.reduce(vars_in_text, acc_vars, &MapSet.put(&2, &1))
 
+    interpolated_text =
+      if context.opts[:skip_interpolation] do
+        text
+      else
+        Enum.reduce(vars_in_text, text, fn var_name, acc_text ->
+          case get_param(context.params, var_name) do
+            nil ->
+              acc_text
+
+            "" ->
+              # Skip interpolation for runtime variables with empty string defaults.
+              # Leave @varname untouched so inject/2 can replace it later with actual runtime values.
+              case Map.get(context.declarations || %{}, "@#{var_name}") do
+                %{lifecycle: :runtime, default: ""} -> acc_text
+                _ -> String.replace(acc_text, "@#{var_name}", "")
+              end
+
+            value ->
+              String.replace(acc_text, "@#{var_name}", to_string(value))
+          end
+        end)
+      end
+
     indented_text =
-      text
+      interpolated_text
       |> String.split("\n")
       |> Enum.map(fn line -> if line == "", do: "\n", else: [indent, line, "\n"] end)
 

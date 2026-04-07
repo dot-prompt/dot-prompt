@@ -3,11 +3,11 @@ import Config
 if config_env() == :prod do
   secret_key_base =
     System.get_env("SECRET_KEY_BASE") ||
-      raise "ENVIRONMENT VARIABLE SECRET_KEY_BASE IS MISSING"
+      Base.encode64(:crypto.strong_rand_bytes(48))
 
   signing_salt =
     System.get_env("LIVE_VIEW_SIGNING_SALT") ||
-      raise "ENVIRONMENT VARIABLE LIVE_VIEW_SIGNING_SALT IS MISSING"
+      Base.encode64(:crypto.strong_rand_bytes(8))
 
   config :dot_prompt,
     prompts_dir: System.get_env("PROMPTS_DIR") || "/app/prompts"

@@ -30,7 +30,7 @@ export const PromptSchema = z.object({
   version: z.number(),
   description: z.string().optional(),
   mode: z.string().optional(),
-  docs: z.string().optional(),
+  docs: z.union([z.string(), z.null()]).optional(),
   params: z.record(z.any()),
   fragments: z.record(z.any()),
   contract: ResponseContract.optional(),

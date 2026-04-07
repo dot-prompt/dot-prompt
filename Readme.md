@@ -389,10 +389,22 @@ end init
 
 ---
 
-## Folder Structure
+## Repository Structure
+
+The DotPrompt repository is organized into functional modules:
+
+- **[`clients/`](./clients)**: Multi-language library implementations (Go, Python, TypeScript).
+- **[`compilers/`](./compilers)**: Core language engines (Native Elixir and High-performance Go).
+- **[`extensions/`](./extensions)**: IDE and editor support (VS Code Extension).
+- **[`server/`](./server)**: Phoenix-based container providing the Viewer, HTTP API, and MCP server.
+- **[`tools/`](./tools)**: Shared testing suites, migration scripts, and utilities.
+
+---
+
+## Folder Structure (Prompts)
 
 ```
-priv/prompts/
+server/prompts/
   concept_explanation.prompt  # current — always latest
   practice.prompt
   skills/

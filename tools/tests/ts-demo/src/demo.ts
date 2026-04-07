@@ -8,7 +8,7 @@ async function testListPrompts(client: DotPromptClient) {
   const prompts = await client.listPrompts();
   console.log(`Found ${prompts.length} prompts:`);
   for (const prompt of prompts) {
-    console.log(`  - ${prompt.name}`);
+    console.log(`  - ${prompt}`);
   }
   return prompts;
 }
@@ -18,7 +18,7 @@ async function testListCollections(client: DotPromptClient) {
   const collections = await client.listCollections();
   console.log(`Found ${collections.length} collections:`);
   for (const coll of collections) {
-    console.log(`  - ${coll.name}`);
+    console.log(`  - ${coll}`);
   }
   return collections;
 }
@@ -71,7 +71,7 @@ async function testFragments(client: DotPromptClient) {
 
   // Test simple_greeting fragment
   try {
-    const result = await client.compile("simple_greeting", {});
+    const result = await client.compile("fragments/simple_greeting", {});
     console.log(`simple_greeting compiled:\n${result.template}`);
   } catch (e) {
     console.log(`simple_greeting error: ${e}`);
@@ -79,7 +79,7 @@ async function testFragments(client: DotPromptClient) {
 
   // Test personalized_greeting fragment
   try {
-    const result = await client.compile("personalized_greeting", {
+    const result = await client.compile("fragments/personalized_greeting", {
       name: "Alice",
       service_name: "Acme Corp",
       experience: 10,
@@ -92,7 +92,7 @@ async function testFragments(client: DotPromptClient) {
 
   // Test conditional_greeting fragment
   try {
-    const result = await client.compile("conditional_greeting", {
+    const result = await client.compile("fragments/conditional_greeting", {
       is_vip: true,
       is_member: true,
       name: "Bob"
@@ -104,7 +104,7 @@ async function testFragments(client: DotPromptClient) {
 
   // Test combined_greeting fragment
   try {
-    const result = await client.compile("combined_greeting", {
+    const result = await client.compile("fragments/combined_greeting", {
       is_vip: false,
       is_member: true,
       name: "Charlie",

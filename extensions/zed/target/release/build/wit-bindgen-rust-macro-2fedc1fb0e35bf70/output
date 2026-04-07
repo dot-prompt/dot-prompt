@@ -1,0 +1,2 @@
+cargo:rerun-if-changed=build.rs
+cargo:rustc-env=DEBUG_OUTPUT_DIR=/home/nahar/Documents/code/dot-prompt/extensions/zed/target/release/build/wit-bindgen-rust-macro-2fedc1fb0e35bf70/out

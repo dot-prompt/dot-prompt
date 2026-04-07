@@ -1,20 +1,20 @@
 {
-  "name": "dot-prompt",
-  "displayName": ".prompt",
-  "description": "VS Code extension for .prompt files with server-backed compilation and compiled view webview",
+  "name": "dotpromptai",
+  "displayName": ".prompt (DotPrompt)",
+  "description": "VS Code extension for .prompt files with server-backed compilation and integrated compiled view",
   "version": "0.1.0",
-  "publisher": "dot-prompt",
+  "publisher": "dotprompt",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dot-prompt/dotprompt"
+  },
   "icon": "./icons/prompt-icon.png",
   "engines": {
     "vscode": "^1.75.0"
   },
-  "activationEvents": [
-    "onLanguage:dot-prompt",
-    "onCommand:dot-prompt.compile",
-    "onCommand:dot-prompt.openCompiledView"
-  ],
+  "activationEvents": [],
   "categories": [
-    "Other",
+    "AI",
     "Programming Languages"
   ],
   "main": "./out/extension.js",
@@ -116,7 +116,7 @@
     "configurationDefaults": {
       "[dot-prompt]": {
         "editor.formatOnSave": true,
-        "editor.defaultFormatter": "dot-prompt.dot-prompt"
+        "editor.defaultFormatter": "dotprompt.dotpromptai"
       },
       "files.associations": {
         "*.prompt": "dot-prompt"
@@ -135,6 +135,5 @@
     "@vscode/test-electron": "^2.3.8",
     "typescript": "^5.3.3"
   },
-  "dependencies": {
-  }
+  "dependencies": {}
 }

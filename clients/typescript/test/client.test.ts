@@ -15,7 +15,7 @@ describe('DotPromptClient', () => {
     it('should delegate listPrompts to asyncClient', async () => {
         (global.fetch as any).mockResolvedValueOnce({
             ok: true,
-            json: () => Promise.resolve(['p1']),
+            json: () => Promise.resolve({ prompts: ['p1'] }),
         });
 
         const result = await client.listPrompts();

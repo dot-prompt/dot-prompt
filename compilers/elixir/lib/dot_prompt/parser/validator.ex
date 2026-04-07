@@ -397,7 +397,8 @@ defmodule DotPrompt.Parser.Validator do
           (!is_nil(atom_name) and Map.has_key?(params, atom_name)) or
             Map.has_key?(params, clean_name) or
             Map.has_key?(params, name) or
-            spec.type == :enum
+            spec.type == :enum or
+            spec.type == :list
 
         not is_provided
       end)

@@ -4,7 +4,7 @@ defmodule DotPrompt.MixProject do
   def project do
     [
       app: :dot_prompt,
-      version: "1.0.3",
+      version: "1.0.5",
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
       description: "A high-performance, native Elixir compiler for the DotPrompt language.",

@@ -6,6 +6,7 @@ defmodule DotPromptServerWeb.CompileController do
       []
       |> maybe_put(:seed, body["seed"])
       |> maybe_put(:major, body["major"])
+      |> maybe_put(:annotated, body["annotated"])
 
     case DotPrompt.compile(prompt, params, opts) do
       {:ok, %DotPrompt.Result{} = result} ->
@@ -18,7 +19,8 @@ defmodule DotPromptServerWeb.CompileController do
           major: result.major,
           version: result.version,
           params: result.metadata.params,
-          warnings: result.metadata.warnings
+          warnings: result.metadata.warnings,
+          used_vars: MapSet.to_list(result.metadata.used_vars)
         })
 
       {:error, details} ->

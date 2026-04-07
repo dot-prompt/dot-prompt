@@ -13,20 +13,22 @@ RUN mix local.hex --force && \
 
 ENV MIX_ENV=prod
 
-COPY mix.exs mix.lock ./
-COPY apps/dot_prompt/mix.exs ./apps/dot_prompt/
-COPY apps/dot_prompt_server/mix.exs ./apps/dot_prompt_server/
+# Fix: Copy from server/ correctly
+COPY server/mix.exs server/mix.lock ./
+COPY compilers/elixir/mix.exs ./compilers/elixir/
+COPY server/apps/dot_prompt_server/mix.exs ./apps/dot_prompt_server/
 
 RUN mix deps.get --only prod
 RUN mix deps.compile
 
-COPY config/ ./config/
-COPY apps/ ./apps/
+COPY server/config/ ./config/
+COPY compilers/elixir/ ./compilers/elixir/
+COPY server/apps/ ./apps/
 
 RUN mix do compile, release --overwrite
 
-# STEP 2: Final Runtime
-FROM debian:sid-slim
+# STEP 2: Final Runtime - use bookworm-slim (stable) instead of sid-slim (unstable)
+FROM debian:bookworm-slim
 
 RUN apt-get update && \
     apt-get install -y libssl3 ncurses-base ca-certificates locales inotify-tools && \

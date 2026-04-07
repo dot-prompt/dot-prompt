@@ -9,10 +9,10 @@ set -euo pipefail
 # Constants
 HEADED_IMAGE="dotprompt/runtime-dev"
 HEADLESS_IMAGE="dotprompt/runtime"
-VERSION_FILE="scripts/VERSION"
-DOCKERFILE_HEADED="dot_prompt/Dockerfile.headed"
-DOCKERFILE_HEADLESS="dot_prompt/Dockerfile.headless"
-BUILD_CONTEXT="dot_prompt"
+VERSION_FILE="$SCRIPT_DIR/VERSION"
+DOCKERFILE_HEADED="$SCRIPT_DIR/../../Dockerfile"
+DOCKERFILE_HEADLESS="$SCRIPT_DIR/../../Dockerfile.headless"
+BUILD_CONTEXT="$SCRIPT_DIR/../../"
 
 # Default: patch bump
 BUMP_TYPE="patch"
