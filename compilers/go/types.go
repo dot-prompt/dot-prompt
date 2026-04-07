@@ -85,6 +85,10 @@ type VaryNode struct {
 
 func (VaryNode) isNode() {}
 
+type SeparatorNode struct {}
+
+func (SeparatorNode) isNode() {}
+
 type ResponseNode struct {
 	Content string
 	Line    int
@@ -117,4 +121,11 @@ type AST struct {
 
 func (a *AST) String() string {
 	return fmt.Sprintf("Schema: %+v, Body nodes: %d", a.Schema, len(a.Body))
+}
+
+// StructuredResult represents compiled output split into system and user fields.
+// Context is merged into user with === CONTEXT === and === TASK === separators.
+type StructuredResult struct {
+	System string `json:"system"`
+	User   string `json:"user"`
 }

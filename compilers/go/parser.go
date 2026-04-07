@@ -53,7 +53,9 @@ func Parse(tokens []Token) (*AST, error) {
 			ast.Body = append(ast.Body, node)
 		case TokenFragmentStatic:
 			ast.Body = append(ast.Body, FragmentNode{Name: strings.Trim(token.Value, "{}"), IsDynamic: false})
-		case TokenFragmentDynamic:
+		case TokenSeparator:
+			ast.Body = append(ast.Body, SeparatorNode{})
+	case TokenFragmentDynamic:
 			ast.Body = append(ast.Body, FragmentNode{Name: strings.Trim(token.Value, "{}"), IsDynamic: true})
 		case TokenText:
 			ast.Body = append(ast.Body, parseLine(token.Value)...)

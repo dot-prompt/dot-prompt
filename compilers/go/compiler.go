@@ -65,6 +65,8 @@ func (c *Compiler) resolveNodeWithDepth(node Node, params map[string]interface{}
 			return fmt.Sprintf("%v", val)
 		}
 		return "@" + n.Name
+	case SeparatorNode:
+		return "\n---\n"
 	case FragmentNode:
 		fragPath := n.Name
 		if spec, ok := ast.Schema.Fragments[n.Name]; ok {
@@ -212,4 +214,44 @@ func compare(actual interface{}, expectedStr string) bool {
 func Compile(promptPath string, params map[string]interface{}, baseDir string) (string, error) {
 	comp := NewCompiler(baseDir)
 	return comp.Compile(promptPath, params)
+}
+
+// CompileStructured compiles a prompt and returns structured output with system and user fields.
+// Content before "---" goes to system, content after goes to user with === CONTEXT === and === TASK === separators.
+func (c *Compiler) CompileStructured(promptPath string, params map[string]interface{}) (*StructuredResult, error) {
+	return c.compileStructuredWithDepth(promptPath, params, 0)
+}
+
+func (c *Compiler) compileStructuredWithDepth(promptPath string, params map[string]interface{}, depth int) (*StructuredResult, error) {
+	compiled, err := c.compileWithDepth(promptPath, params, depth)
+	if err != nil {
+		return nil, err
+	}
+	return splitStructuredOutput(compiled), nil
+}
+
+// CompileStringStructured compiles a prompt string and returns structured output.
+func (c *Compiler) CompileStringStructured(content string, params map[string]interface{}) (*StructuredResult, error) {
+	compiled, err := c.CompileString(content, params)
+	if err != nil {
+		return nil, err
+	}
+	return splitStructuredOutput(compiled), nil
+}
+
+// splitStructuredOutput splits the compiled output into system and user fields.
+// Content before "\n---\n" goes to system, content after goes to user with separators.
+func splitStructuredOutput(output string) *StructuredResult {
+	parts := strings.SplitN(output, "\n---\n", 2)
+	if len(parts) == 2 {
+		return &StructuredResult{
+			System: strings.TrimSpace(parts[0]),
+			User:   "=== CONTEXT ===\n" + strings.TrimSpace(parts[1]) + "\n=== TASK ===",
+		}
+	}
+	// No separator found - entire output goes to user, system is empty
+	return &StructuredResult{
+		System: "",
+		User:   "=== CONTEXT ===\n\n=== TASK ===\n" + strings.TrimSpace(output),
+	}
 }
