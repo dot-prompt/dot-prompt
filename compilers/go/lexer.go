@@ -14,6 +14,7 @@ const (
 	TokenVariable
 	TokenFragmentStatic
 	TokenFragmentDynamic
+	TokenSeparator
 	TokenIf
 	TokenElif
 	TokenElse
@@ -43,6 +44,7 @@ var (
 	reVaryStart        = regexp.MustCompile(`^vary\s+(@\w+)\s+do$`)
 	reVarySimpleStart  = regexp.MustCompile(`^vary\s+do$`)
 	reFragmentStatic   = regexp.MustCompile(`^\{[\w\-\.\/]+\}$`)
+	reSeparator        = regexp.MustCompile(`^---+$`)
 	reFragmentDynamic  = regexp.MustCompile(`^\{\{[\w\-\.\/]+\}\}$`)
 	reParamDef         = regexp.MustCompile(`^(@[\w\d_]+):\s*(.*)$`)
 	reFragmentDef      = regexp.MustCompile(`^(\{{1,2}[\w\-\.\/]+\}{1,2}):\s*(.*)$`)
@@ -132,6 +134,8 @@ func tokenizeLine(line string, lineNo int) []Token {
 		tokens = append(tokens, Token{Type: TokenInitItem, Value: match[1], Meta: match[2], Line: lineNo, Indent: indent})
 	} else if reFragmentStatic.MatchString(trimmed) && trimmed != "{response_contract}" {
 		tokens = append(tokens, Token{Type: TokenFragmentStatic, Value: trimmed, Line: lineNo, Indent: indent})
+	} else if reSeparator.MatchString(trimmed) {
+		tokens = append(tokens, Token{Type: TokenSeparator, Value: trimmed, Line: lineNo, Indent: indent})
 	} else if reFragmentDynamic.MatchString(trimmed) {
 		tokens = append(tokens, Token{Type: TokenFragmentDynamic, Value: trimmed, Line: lineNo, Indent: indent})
 	} else {
